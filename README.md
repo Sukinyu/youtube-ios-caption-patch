@@ -9,6 +9,6 @@ Converts a certain caption formats to VTT to work.
 
 
 # Known Issues:
-* Breaks when YT swaps video players
+* Breaks when YT swaps video players(adds the more videos button)
 * Sends a second/third fetch request for captions
-* When enabling captions, there are two (builtin & added)
+* When enabling captions, there are two (YT & the injected) when not in fullscreen
