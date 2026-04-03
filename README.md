@@ -14,4 +14,5 @@ Converts a certain caption formats to VTT to work.
 * When enabling captions, there are two (YT & the injected) when not in fullscreen
 
 
-# Youtube has made itself worse (with ad-block)
+Youtube has made itself worse (with ad-block)
+Has nothing to do with this script.
