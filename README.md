@@ -1,5 +1,5 @@
 # Project for fixing iOS captions on youtube
-Somewhat working
+Working but could be improved apon.
 
 Obtains the url used by YouTube to fetch captions.
 Removes unneeded data like tracking data from it.
@@ -16,3 +16,7 @@ Converts a certain caption formats to VTT to work.
 
 Youtube has made itself worse (with ad-block).
 This has as nothing to do with this script.
+
+
+
+I kinda need help with this...
