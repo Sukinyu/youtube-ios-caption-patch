@@ -125,14 +125,24 @@ const po = new PerformanceObserver((list) => {
     }
     // Try VTT first, fallback to SRV3/JSON3/XML
     tryFetch("vtt")
-      .then(() => createTrack(newURL.toString()))
-      .catch(() =>
-        tryFetch("srv3").then((txt) => {
-          // Optional: parse SRV3 here and run createTrack with a Blob URL
-          console.log("SRV3 fallback");
-          createTrack(srv3ToVttBlob(txt));
-        })
-      );
+  .then((vttText) => {
+    // Modify VTT content
+    const modified = vttText
+      .replace(/Style:/g, "STYLE")
+      .replace(/##/g, "");
+
+    const blobUrl = URL.createObjectURL(
+      new Blob([modified], { type: "text/vtt" })
+    );
+
+    createTrack(blobUrl);
+  })
+  .catch(() =>
+    tryFetch("srv3").then((txt) => {
+      console.log("SRV3 fallback");
+      createTrack(srv3ToVttBlob(txt));
+    })
+  );
   }
 });
 
