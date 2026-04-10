@@ -57,6 +57,9 @@ const po = new PerformanceObserver((list) => {
     const createTrack = (vttUrl) => {
       let track = video.querySelector("track[data-injected]");
       if (track) {
+        if (track.src.startsWith("blob:")) {
+          URL.revokeObjectURL(track.src);
+        }
         track.src = vttUrl;
         console.log("Updated captions track:", vttUrl);
       } else {
