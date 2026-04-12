@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Fix MWeb Youtube Fullscreen Captions
 // @author       Sukinyu
-// @version      0.3.1
+// @version      0.3.2
 // @last         8/29/2025 (mm/dd/yyyy)
 // @description  Fix captions on youtube videos in fullscreen mode on iOS (https://m.youtube.com/watch?). Injects a captions track with user-preferred language.
 // @match        https://m.youtube.com/watch?*
@@ -241,7 +241,8 @@ STYLE
         console.log("SRV3 fallback");
         createTrack(srv3ToVttBlob(txt));
       })
-    );
+    )
+  );
   }
 });
 
