@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Fix MWeb Youtube Fullscreen Captions
 // @author       Sukinyu
-// @version      0.2.0
+// @version      0.3.1
 // @last         8/29/2025 (mm/dd/yyyy)
 // @description  Fix captions on youtube videos in fullscreen mode on iOS (https://m.youtube.com/watch?). Injects a captions track with user-preferred language.
 // @match        https://m.youtube.com/watch?*
@@ -78,6 +78,94 @@ const po = new PerformanceObserver((list) => {
       }
     };
 
+    function json3ToVtt(json) {
+    const events = json.events || [];
+    const pens = json.pens || [];
+
+    // ---------- helpers ----------
+    function ts(ms) {
+        const s = ms / 1000;
+        const h = String(Math.floor(s / 3600)).padStart(2, "0");
+        const m = String(Math.floor((s % 3600) / 60)).padStart(2, "0");
+        const sec = (s % 60).toFixed(3).padStart(6, "0");
+        return `${h}:${m}:${sec}`;
+    }
+
+    function rgb(num) {
+        return {
+            r: (num >> 16) & 255,
+            g: (num >> 8) & 255,
+            b: num & 255
+        };
+    }
+
+    function penToCss(pen) {
+        const italic = pen.iAttr ? (pen.iAttr == 1) ? 'font-style: italic;' : '' : '';
+        const edgeType = pen.etEdgeType ?? 0;
+        const eC = edgeType != 0 ? rgb(pen.ecEdgeColor ?? 0) : null;
+        const edge = edgeType == 3 ? `-webkit-text-stroke: 2px rgba(${eC.r},${eC.g},${eC.b},1)` : '';
+        if (!pen) return "color: rgba(255,255,255,1);";
+        const c = rgb(pen.fcForeColor ?? 0xffffff);
+        const alpha = pen.foForeAlpha != null ? (pen.foForeAlpha / 255) : 1;
+        const cB = rgb(pen.bcBackColor ?? 0);
+        const bgAlpha = pen.boBackAlpha != null ? (pen.boBackAlpha / 255) : 0.5;
+        const ps = pen.szPenSize ? `font-size: ${pen.szPenSize}%` : '';
+
+        return `
+            ${italic}
+            color: rgba(${c.r},${c.g},${c.b},${alpha});
+            background: rgba(${cB.r},${cB.g},${cB.b},${bgAlpha});
+            ${edge}
+            ${ps}
+        `.replace(/\s+/g, " ").trim();
+    }
+
+    // ---------- build CSS from pens ----------
+    let style = `WEBVTT
+
+STYLE
+`;
+
+    for (let i = 0; i < pens.length; i++) {
+        const pen = pens[i];
+        if (!pen || Object.keys(pen).length === 0) continue;
+
+        style += `::cue(.pen${i}) { ${penToCss(pen)} }\n`;
+    }
+
+    style += "\n";
+
+    // ---------- build cues ----------
+    let vtt = style;
+
+    for (const ev of events) {
+        if (!ev.segs?.length) continue;
+
+        const start = ts(ev.tStartMs);
+        const end = ts(ev.tStartMs + (ev.dDurationMs || 0));
+
+        let parts = [];
+
+        for (const seg of ev.segs) {
+            const text = seg.utf8;
+            const penId = seg.pPenId ?? 0;
+
+            if (!text) continue;
+
+            parts.push(`<c.pen${penId}>${text}</c.pen${penId}>`);
+        }
+
+        if (!parts.length) continue;
+
+        const line = parts.join("");
+
+        vtt += `${start} --> ${end}\n`;
+        vtt += `${line}\n\n`;
+    }
+
+    return vtt;
+}
+
     function srv3ToVttBlob(srv3Text) {
       const lines = ["WEBVTT\n\n"];
 
@@ -126,26 +214,34 @@ const po = new PerformanceObserver((list) => {
           : `${pad(m)}:${pad(s)}.${String(ms).padStart(3, "0")}`;
       }
     }
-    // Try VTT first, fallback to SRV3/JSON3/XML
-    tryFetch("vtt")
-  .then((vttText) => {
-    // Modify VTT content
-    const modified = vttText
-      .replace(/Style:/g, "STYLE")
-      .replace(/##/g, "");
-
+    // Try JSON3 first, fallback to VTT/SRV3
+    tryFetch("json3")
+  .then((json) => {
+    const json3 = JSON.parse(json.replace(/\\/g, "\\\\"));
     const blobUrl = URL.createObjectURL(
-      new Blob([modified], { type: "text/vtt" })
+      new Blob([json3ToVtt(json3)],{ type: "text/vtt" })
     );
-
     createTrack(blobUrl);
   })
-  .catch(() =>
-    tryFetch("srv3").then((txt) => {
-      console.log("SRV3 fallback");
-      createTrack(srv3ToVttBlob(txt));
+  .catch(() => 
+      tryFetch("vtt")
+    .then((vttText) => {
+      // Modify VTT content
+      const modified = vttText
+        .replace(/Style:/g, "STYLE")
+        .replace(/##/g, "");
+
+      const blobUrl = URL.createObjectURL(
+        new Blob([modified], { type: "text/vtt" })
+      );
+      createTrack(blobUrl);
     })
-  );
+    .catch(() =>
+      tryFetch("srv3").then((txt) => {
+        console.log("SRV3 fallback");
+        createTrack(srv3ToVttBlob(txt));
+      })
+    );
   }
 });
 
