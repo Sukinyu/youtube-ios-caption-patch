@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         Fix MWeb Youtube Fullscreen Captions
 // @author       Sukinyu
-// @version      0.3.2
-// @last         8/29/2025 (mm/dd/yyyy)
+// @version      0.3.4
+// @last         4/11/2026 (mm/dd/yyyy)
 // @description  Fix captions on youtube videos in fullscreen mode on iOS (https://m.youtube.com/watch?). Injects a captions track with user-preferred language.
 // @match        https://m.youtube.com/watch?*
 // ==/UserScript==
@@ -92,29 +92,26 @@ const po = new PerformanceObserver((list) => {
     }
 
     function rgb(num) {
-        return {
-            r: (num >> 16) & 255,
-            g: (num >> 8) & 255,
-            b: num & 255
-        };
+        return `${(num >> 16) & 255}, ${(num >> 8) & 255}, ${num & 255}`;
     }
 
     function penToCss(pen) {
         const italic = pen.iAttr ? (pen.iAttr == 1) ? 'font-style: italic;' : '' : '';
         const edgeType = pen.etEdgeType ?? 0;
-        const eC = edgeType != 0 ? rgb(pen.ecEdgeColor ?? 0) : null;
-        const edge = edgeType == 3 ? `-webkit-text-stroke: 2px rgba(${eC.r},${eC.g},${eC.b},1)` : '';
         if (!pen) return "color: rgba(255,255,255,1);";
         const c = rgb(pen.fcForeColor ?? 0xffffff);
         const alpha = pen.foForeAlpha != null ? (pen.foForeAlpha / 255) : 1;
         const cB = rgb(pen.bcBackColor ?? 0);
         const bgAlpha = pen.boBackAlpha != null ? (pen.boBackAlpha / 255) : 0.5;
-        const ps = pen.szPenSize ? `font-size: ${pen.szPenSize}%` : '';
+        const fs = 0.0445 * parseFloat(video.style.height);
+        const eC = edgeType != 0 ? `0 0 ${0.0625 * fs}px rgb(${rgb(pen.ecEdgeColor ?? 0)})` : null;
+        const edge = edgeType == 3 ? `text-shadow: ${eC},${eC},${eC},${eC},${eC};` : '';
+        const ps = pen.szPenSize ? `font-size: ${fs * pen.szPenSize / 100}px` : '';
 
         return `
             ${italic}
-            color: rgba(${c.r},${c.g},${c.b},${alpha});
-            background: rgba(${cB.r},${cB.g},${cB.b},${bgAlpha});
+            color: rgba(${c},${alpha});
+            background: rgba(${cB},${bgAlpha});
             ${edge}
             ${ps}
         `.replace(/\s+/g, " ").trim();
