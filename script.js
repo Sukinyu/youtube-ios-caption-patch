@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         Fix MWeb Youtube Fullscreen Captions
 // @author       Sukinyu
-// @version      0.3.7
-// @last         4/11/2026 (mm/dd/yyyy)
+// @version      0.3.10
+// @last         4/13/2026 (mm/dd/yyyy)
 // @description  Fix captions on youtube videos in fullscreen mode on iOS (https://m.youtube.com/watch?). Injects a captions track with user-preferred language.
 // @match        https://m.youtube.com/watch?*
 // ==/UserScript==
@@ -59,6 +59,7 @@ const po = new PerformanceObserver((list) => {
 			if (track) {
 				if (track.src.startsWith("blob:")) {
 					URL.revokeObjectURL(track.src);
+					console.log("Revoked old blob URL:", track.src);
 				}
 				track.src = vttUrl;
 				console.log("Updated captions track:", vttUrl);
@@ -98,6 +99,7 @@ const po = new PerformanceObserver((list) => {
 			function penToCss(pen) {
 				const bold = pen.bAttr == 1 ? "font-weight: bold;" : "";
 				const italic = pen.iAttr == 1 ? "font-style: italic;" : "";
+				const underline = pen.uAttr == 1 ? "text-decoration: underline;" : "";
 				const edgeType = pen.etEdgeType ?? 0;
 				if (!pen) return "color: rgba(255,255,255,1);";
 				const c = rgb(pen.fcForeColor ?? 0xffffff);
@@ -121,6 +123,7 @@ const po = new PerformanceObserver((list) => {
 				return `
             ${italic}
             ${bold}
+			${underline}
             color: rgba(${c},${alpha});
             background: rgba(${cB},${bgAlpha});
             font-family: "YouTube Noto", Roboto, Arial, Helvetica, Verdana, "PT Sans Caption", sans-serif;
@@ -156,14 +159,21 @@ STYLE
 				const end = ts(ev.tStartMs + (ev.dDurationMs || 0));
 
 				let parts = [];
-
 				for (const seg of ev.segs) {
 					const text = seg.utf8;
-					const penId = seg.pPenId ?? 0;
+					const penId = seg.pPenId;
 
 					if (!text) continue;
-
-					parts.push(`<c.pen${penId}>${text}</c.pen${penId}>`);
+                    if (!penId) {
+                        parts.push(text);
+                        continue;
+                    }
+                    // Class ending tags are not meant to have a class-name
+					parts.push(`<c.pen${penId}>${text}</c>`);
+				}
+				if (ev.pPenId) {
+					parts = parts.unshift(`<v.pen${ev.pPenId}>`);
+					parts.push(`</v>`);
 				}
 
 				if (!parts.length) continue;
@@ -173,7 +183,6 @@ STYLE
 				vtt += `${start} --> ${end}\n`;
 				vtt += `${line}\n\n`;
 			}
-
 			return vtt;
 		}
 
