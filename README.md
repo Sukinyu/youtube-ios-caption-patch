@@ -15,7 +15,7 @@ Music Video with animated captions: https://www.youtube.com/watch?v=6LtrI3MOfQg
 * Breaks when YT swaps video players(adds the more videos button)
 * Sends a second/third fetch request for captions
 * When enabling captions, there are two (YT & the injected) when not in fullscreen
-
+* Overlapping captions not supported yet
 
 Youtube has made itself worse (with ad-block).  
 This has as nothing to do with this script.  
