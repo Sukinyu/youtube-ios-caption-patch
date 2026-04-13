@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         Fix MWeb Youtube Fullscreen Captions
 // @author       Sukinyu
-// @version      0.3.12
-// @last         8/29/2025 (mm/dd/yyyy)
+// @version      0.3.7
+// @last         4/11/2026 (mm/dd/yyyy)
 // @description  Fix captions on youtube videos in fullscreen mode on iOS (https://m.youtube.com/watch?). Injects a captions track with user-preferred language.
 // @match        https://m.youtube.com/watch?*
 // ==/UserScript==
@@ -94,37 +94,6 @@ const po = new PerformanceObserver((list) => {
 			function rgb(num) {
 				return `${(num >> 16) & 255},${(num >> 8) & 255},${num & 255}`;
 			}
-			function buildLines(segs) {
-				const lines = [];
-				let current = [];
-
-				for (const seg of segs) {
-					const text = seg.utf8;
-					const penId = seg.pPenId;
-
-					if (text == null) continue;
-
-					const parts = text.split("\n");
-
-					for (let i = 0; i < parts.length; i++) {
-						const chunk = parts[i];
-
-						if (chunk.length > 0) {
-							current.push({ text: chunk, penId });
-						}
-
-						// newline = ONLY structural break
-						if (i !== parts.length - 1) {
-							lines.push(current);
-							current = [];
-						}
-					}
-				}
-
-				if (current.length) lines.push(current);
-
-				return lines;
-			}
 
 			function penToCss(pen) {
 				const bold = pen.bAttr == 1 ? "font-weight: bold;" : "";
@@ -186,27 +155,25 @@ STYLE
 				const start = ts(ev.tStartMs);
 				const end = ts(ev.tStartMs + (ev.dDurationMs || 0));
 
-				const lines = buildLines(ev.segs);
+				let parts = [];
 
-				for (let i = lines.length - 1; i >= 0; i--) {
-					const lineSegs = lines[i];
-					let line = "";
+				for (const seg of ev.segs) {
+					const text = seg.utf8;
+					const penId = seg.pPenId ?? 0;
 
-					for (const seg of lineSegs) {
-						const text = seg.text;
-						const penId = seg.penId;
+					if (!text) continue;
 
-						if (penId == null) {
-							line += text;
-						} else {
-							line += `<c.pen${penId}>${text}</c.pen${penId}>`;
-						}
-					}
-
-					vtt += `${start} --> ${end}\n`;
-					vtt += `${line}\n\n`;
+					parts.push(`<c.pen${penId}>${text}</c.pen${penId}>`);
 				}
+
+				if (!parts.length) continue;
+
+				const line = parts.join("");
+
+				vtt += `${start} --> ${end}\n`;
+				vtt += `${line}\n\n`;
 			}
+
 			return vtt;
 		}
 
