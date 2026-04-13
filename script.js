@@ -99,7 +99,8 @@ const po = new PerformanceObserver((list) => {
 			function penToCss(pen) {
 				const bold = pen.bAttr == 1 ? "font-weight: bold;" : "";
 				const italic = pen.iAttr == 1 ? "font-style: italic;" : "";
-				const underline = pen.uAttr == 1 ? "text-decoration: underline;" : "";
+				const underline =
+					pen.uAttr == 1 ? "text-decoration: underline;" : "";
 				const edgeType = pen.etEdgeType ?? 0;
 				if (!pen) return "color: rgba(255,255,255,1);";
 				const c = rgb(pen.fcForeColor ?? 0xffffff);
@@ -164,11 +165,11 @@ STYLE
 					const penId = seg.pPenId;
 
 					if (!text) continue;
-                    if (!penId) {
-                        parts.push(text);
-                        continue;
-                    }
-                    // Class ending tags are not meant to have a class-name
+					if (!penId) {
+						parts.push(text);
+						continue;
+					}
+					// Class ending tags are not meant to have a class-name
 					parts.push(`<c.pen${penId}>${text}</c>`);
 				}
 				if (ev.pPenId) {

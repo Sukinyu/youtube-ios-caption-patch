@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         Fix MWeb Youtube Fullscreen Captions
 // @author       Sukinyu
-// @version      0.3.12
-// @last         8/29/2025 (mm/dd/yyyy)
+// @version      0.3.10
+// @last         4/13/2026 (mm/dd/yyyy)
 // @description  Fix captions on youtube videos in fullscreen mode on iOS (https://m.youtube.com/watch?). Injects a captions track with user-preferred language.
 // @match        https://m.youtube.com/watch?*
 // ==/UserScript==
@@ -59,6 +59,7 @@ const po = new PerformanceObserver((list) => {
 			if (track) {
 				if (track.src.startsWith("blob:")) {
 					URL.revokeObjectURL(track.src);
+					console.log("Revoked old blob URL:", track.src);
 				}
 				track.src = vttUrl;
 				console.log("Updated captions track:", vttUrl);
@@ -94,41 +95,11 @@ const po = new PerformanceObserver((list) => {
 			function rgb(num) {
 				return `${(num >> 16) & 255},${(num >> 8) & 255},${num & 255}`;
 			}
-			function buildLines(segs) {
-				const lines = [];
-				let current = [];
-
-				for (const seg of segs) {
-					const text = seg.utf8;
-					const penId = seg.pPenId;
-
-					if (text == null) continue;
-
-					const parts = text.split("\n");
-
-					for (let i = 0; i < parts.length; i++) {
-						const chunk = parts[i];
-
-						if (chunk.length > 0) {
-							current.push({ text: chunk, penId });
-						}
-
-						// newline = ONLY structural break
-						if (i !== parts.length - 1) {
-							lines.push(current);
-							current = [];
-						}
-					}
-				}
-
-				if (current.length) lines.push(current);
-
-				return lines;
-			}
 
 			function penToCss(pen) {
 				const bold = pen.bAttr == 1 ? "font-weight: bold;" : "";
 				const italic = pen.iAttr == 1 ? "font-style: italic;" : "";
+				const underline = pen.uAttr == 1 ? "text-decoration: underline;" : "";
 				const edgeType = pen.etEdgeType ?? 0;
 				if (!pen) return "color: rgba(255,255,255,1);";
 				const c = rgb(pen.fcForeColor ?? 0xffffff);
@@ -152,6 +123,7 @@ const po = new PerformanceObserver((list) => {
 				return `
             ${italic}
             ${bold}
+			${underline}
             color: rgba(${c},${alpha});
             background: rgba(${cB},${bgAlpha});
             font-family: "YouTube Noto", Roboto, Arial, Helvetica, Verdana, "PT Sans Caption", sans-serif;
@@ -186,26 +158,30 @@ STYLE
 				const start = ts(ev.tStartMs);
 				const end = ts(ev.tStartMs + (ev.dDurationMs || 0));
 
-				const lines = buildLines(ev.segs);
+				let parts = [];
+				for (const seg of ev.segs) {
+					const text = seg.utf8;
+					const penId = seg.pPenId;
 
-				for (let i = lines.length - 1; i >= 0; i--) {
-					const lineSegs = lines[i];
-					let line = "";
-
-					for (const seg of lineSegs) {
-						const text = seg.text;
-						const penId = seg.penId;
-
-						if (penId == null) {
-							line += text;
-						} else {
-							line += `<c.pen${penId}>${text}</c.pen${penId}>`;
-						}
-					}
-
-					vtt += `${start} --> ${end}\n`;
-					vtt += `${line}\n\n`;
+					if (!text) continue;
+                    if (!penId) {
+                        parts.push(text);
+                        continue;
+                    }
+                    // Class ending tags are not meant to have a class-name
+					parts.push(`<c.pen${penId}>${text}</c>`);
 				}
+				if (ev.pPenId) {
+					parts = parts.unshift(`<v.pen${ev.pPenId}>`);
+					parts.push(`</v>`);
+				}
+
+				if (!parts.length) continue;
+
+				const line = parts.join("");
+
+				vtt += `${start} --> ${end}\n`;
+				vtt += `${line}\n\n`;
 			}
 			return vtt;
 		}
