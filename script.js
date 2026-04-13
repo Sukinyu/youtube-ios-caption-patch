@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         Fix MWeb Youtube Fullscreen Captions
 // @author       Sukinyu
-// @version      0.3.5
-// @last         4/11/2026 (mm/dd/yyyy)
+// @version      0.3.12
+// @last         8/29/2025 (mm/dd/yyyy)
 // @description  Fix captions on youtube videos in fullscreen mode on iOS (https://m.youtube.com/watch?). Injects a captions track with user-preferred language.
 // @match        https://m.youtube.com/watch?*
 // ==/UserScript==
@@ -10,237 +10,296 @@
 const injectedUrls = new Set();
 
 const po = new PerformanceObserver((list) => {
-  for (const entry of list.getEntries()) {
-    const url = entry.name;
-    if (!url.includes("/api/timedtext") || injectedUrls.has(url)) continue;
-    injectedUrls.add(url);
+	for (const entry of list.getEntries()) {
+		const url = entry.name;
+		if (!url.includes("/api/timedtext") || injectedUrls.has(url)) continue;
+		injectedUrls.add(url);
 
-    console.log("Caption request detected:", url);
-    let newURL = new URL(url);
-    const removeParams = [
-      "potc",
-      "xorb",
-      "xobt",
-      "xovt",
-      "cbr",
-      "cbrver",
-      "cver",
-      "cplayer",
-      "cos",
-      "cosver",
-      "cplatform",
-    ];
-    [...newURL.searchParams.keys()].forEach(
-      (key) => removeParams.includes(key) && newURL.searchParams.delete(key)
-    );
-    const userLang = navigator.language.split("-")[0] || "en"; // Use browser language or default to English
-    if (
-      !newURL.searchParams.has("lang", userLang) &&
-      !newURL.searchParams.has("tlang")
-    ) {
-      newURL.searchParams.set("tlang", userLang);
-    }
-    const translated = newURL.searchParams.has("tlang");
+		console.log("Caption request detected:", url);
+		let newURL = new URL(url);
+		const removeParams = [
+			"potc",
+			"xorb",
+			"xobt",
+			"xovt",
+			"cbr",
+			"cbrver",
+			"cver",
+			"cplayer",
+			"cos",
+			"cosver",
+			"cplatform",
+		];
+		[...newURL.searchParams.keys()].forEach(
+			(key) => removeParams.includes(key) && newURL.searchParams.delete(key),
+		);
+		const userLang = navigator.language.split("-")[0] || "en"; // Use browser language or default to English
+		if (
+			!newURL.searchParams.has("lang", userLang) &&
+			!newURL.searchParams.has("tlang")
+		) {
+			newURL.searchParams.set("tlang", userLang);
+		}
+		const translated = newURL.searchParams.has("tlang");
 
-    const video = document.querySelector("video");
-    if (!video) return;
+		const video = document.querySelector("video");
+		if (!video) return;
 
-    const tryFetch = (returnFormat) => {
-      newURL.searchParams.set("fmt", returnFormat);
-      injectedUrls.add(newURL.toString());
-      return fetch(newURL).then((r) => {
-        if (!r.ok) throw new Error(`HTTP ${r.status}`);
-        return r.text();
-      });
-    };
+		const tryFetch = (returnFormat) => {
+			newURL.searchParams.set("fmt", returnFormat);
+			injectedUrls.add(newURL.toString());
+			return fetch(newURL).then((r) => {
+				if (!r.ok) throw new Error(`HTTP ${r.status}`);
+				return r.text();
+			});
+		};
 
-    const createTrack = (vttUrl) => {
-      let track = video.querySelector("track[data-injected]");
-      if (track) {
-        if (track.src.startsWith("blob:")) {
-          URL.revokeObjectURL(track.src);
-        }
-        track.src = vttUrl;
-        console.log("Updated captions track:", vttUrl);
-      } else {
-        track = document.createElement("track");
-        track.kind = "captions";
-        track.label = "Injected CC";
-        track.srclang = "en";
-        track.src = vttUrl;
-        track.default = true;
-        track.setAttribute("data-injected", true);
-        video.appendChild(track);
-        console.log("Injected captions track:", vttUrl);
-      }
-      if (translated) {
-        track.label += " (TS)"; // short form of "Translated"
-      }
-    };
+		const createTrack = (vttUrl) => {
+			let track = video.querySelector("track[data-injected]");
+			if (track) {
+				if (track.src.startsWith("blob:")) {
+					URL.revokeObjectURL(track.src);
+				}
+				track.src = vttUrl;
+				console.log("Updated captions track:", vttUrl);
+			} else {
+				track = document.createElement("track");
+				track.kind = "captions";
+				track.label = "Injected CC";
+				track.srclang = "en";
+				track.src = vttUrl;
+				track.default = true;
+				track.setAttribute("data-injected", "");
+				video.appendChild(track);
+				console.log("Injected captions track:", vttUrl);
+			}
+			if (translated) {
+				track.label += " (TS)"; // short form of "Translated"
+			}
+		};
 
-    function json3ToVtt(json) {
-    const events = json.events || [];
-    const pens = json.pens || [];
+		function json3ToVtt(json) {
+			const events = json.events || [];
+			const pens = json.pens || [];
 
-    // ---------- helpers ----------
-    function ts(ms) {
-        const s = ms / 1000;
-        const h = String(Math.floor(s / 3600)).padStart(2, "0");
-        const m = String(Math.floor((s % 3600) / 60)).padStart(2, "0");
-        const sec = (s % 60).toFixed(3).padStart(6, "0");
-        return `${h}:${m}:${sec}`;
-    }
+			// ---------- helpers ----------
+			function ts(ms) {
+				const s = ms / 1000;
+				const h = String(Math.floor(s / 3600)).padStart(2, "0");
+				const m = String(Math.floor((s % 3600) / 60)).padStart(2, "0");
+				const sec = (s % 60).toFixed(3).padStart(6, "0");
+				return `${h}:${m}:${sec}`;
+			}
 
-    function rgb(num) {
-        return `${(num >> 16) & 255}, ${(num >> 8) & 255}, ${num & 255}`;
-    }
+			function rgb(num) {
+				return `${(num >> 16) & 255},${(num >> 8) & 255},${num & 255}`;
+			}
+			function buildLines(segs) {
+				const lines = [];
+				let current = [];
 
-    function penToCss(pen) {
-        const italic = pen.iAttr ? (pen.iAttr == 1) ? 'font-style: italic;' : '' : '';
-        const edgeType = pen.etEdgeType ?? 0;
-        if (!pen) return "color: rgba(255,255,255,1);";
-        const c = rgb(pen.fcForeColor ?? 0xffffff);
-        const alpha = pen.foForeAlpha != null ? (pen.foForeAlpha / 255) : 1;
-        const cB = rgb(pen.bcBackColor ?? 0);
-        const bgAlpha = pen.boBackAlpha != null ? (pen.boBackAlpha / 255) : 0.5;
-        const fs = 0.0445 * parseFloat(video.style.height) * pen.szPenSize / 100;
-        const eC = edgeType != 0 ? `0 0 ${0.0625 * fs}px rgb(${rgb(pen.ecEdgeColor ?? 0)})` : null;
-        const edge = edgeType == 3 ? `text-shadow: ${eC},${eC},${eC},${eC},${eC};` : '';
-        const ps = pen.szPenSize ? `font-size: ${fs}px` : '';
+				for (const seg of segs) {
+					const text = seg.utf8;
+					const penId = seg.pPenId;
 
-        return `
+					if (text == null) continue;
+
+					const parts = text.split("\n");
+
+					for (let i = 0; i < parts.length; i++) {
+						const chunk = parts[i];
+
+						if (chunk.length > 0) {
+							current.push({ text: chunk, penId });
+						}
+
+						// newline = ONLY structural break
+						if (i !== parts.length - 1) {
+							lines.push(current);
+							current = [];
+						}
+					}
+				}
+
+				if (current.length) lines.push(current);
+
+				return lines;
+			}
+
+			function penToCss(pen) {
+				const bold = pen.bAttr == 1 ? "font-weight: bold;" : "";
+				const italic = pen.iAttr == 1 ? "font-style: italic;" : "";
+				const edgeType = pen.etEdgeType ?? 0;
+				if (!pen) return "color: rgba(255,255,255,1);";
+				const c = rgb(pen.fcForeColor ?? 0xffffff);
+				const alpha = pen.foForeAlpha != null ? pen.foForeAlpha / 255 : 1;
+				const cB = rgb(pen.bcBackColor ?? 0);
+				const bgAlpha =
+					pen.boBackAlpha != null ? pen.boBackAlpha / 255 : 0.5;
+				const fs =
+					(0.0445 * video.getBoundingClientRect().height * pen.szPenSize) /
+					100;
+				const eC =
+					edgeType != 0
+						? `0 0 ${0.0625 * fs}px rgb(${rgb(pen.ecEdgeColor ?? 0)})`
+						: null;
+				const edge =
+					edgeType == 3
+						? `text-shadow: ${eC},${eC},${eC},${eC},${eC};`
+						: "";
+				const ps = pen.szPenSize ? `font-size: ${fs}px` : "";
+
+				return `
             ${italic}
+            ${bold}
             color: rgba(${c},${alpha});
             background: rgba(${cB},${bgAlpha});
+            font-family: "YouTube Noto", Roboto, Arial, Helvetica, Verdana, "PT Sans Caption", sans-serif;
             ${edge}
             ${ps}
-        `.replace(/\s+/g, " ").trim();
-    }
+        `
+					.replace(/\s+/g, " ")
+					.trim();
+			}
 
-    // ---------- build CSS from pens ----------
-    let style = `WEBVTT
+			// ---------- build CSS from pens ----------
+			let style = `WEBVTT
 
 STYLE
 `;
 
-    for (let i = 0; i < pens.length; i++) {
-        const pen = pens[i];
-        if (!pen || Object.keys(pen).length === 0) continue;
+			for (let i = 0; i < pens.length; i++) {
+				const pen = pens[i];
+				if (!pen || Object.keys(pen).length === 0) continue;
 
-        style += `::cue(.pen${i}) { ${penToCss(pen)} }\n`;
-    }
+				style += `::cue(.pen${i}) { ${penToCss(pen)} }\n`;
+			}
 
-    style += "\n";
+			style += "\n";
 
-    // ---------- build cues ----------
-    let vtt = style;
+			// ---------- build cues ----------
+			let vtt = style;
 
-    for (const ev of events) {
-        if (!ev.segs?.length) continue;
+			for (const ev of events) {
+				if (!ev.segs?.length) continue;
 
-        const start = ts(ev.tStartMs);
-        const end = ts(ev.tStartMs + (ev.dDurationMs || 0));
+				const start = ts(ev.tStartMs);
+				const end = ts(ev.tStartMs + (ev.dDurationMs || 0));
 
-        let parts = [];
+				const lines = buildLines(ev.segs);
 
-        for (const seg of ev.segs) {
-            const text = seg.utf8;
-            const penId = seg.pPenId ?? 0;
+				for (let i = lines.length - 1; i >= 0; i--) {
+					const lineSegs = lines[i];
+					let line = "";
 
-            if (!text) continue;
+					for (const seg of lineSegs) {
+						const text = seg.text;
+						const penId = seg.penId;
 
-            parts.push(`<c.pen${penId}>${text}</c.pen${penId}>`);
-        }
+						if (penId == null) {
+							line += text;
+						} else {
+							line += `<c.pen${penId}>${text}</c.pen${penId}>`;
+						}
+					}
 
-        if (!parts.length) continue;
+					vtt += `${start} --> ${end}\n`;
+					vtt += `${line}\n\n`;
+				}
+			}
+			return vtt;
+		}
 
-        const line = parts.join("");
+		function srv3ToVttBlob(srv3Text) {
+			const lines = ["WEBVTT\n\n"];
 
-        vtt += `${start} --> ${end}\n`;
-        vtt += `${line}\n\n`;
-    }
+			const pMatches = srv3Text.matchAll(
+				/<p\s+[^>]*t="(\d+)"\s+d="(\d+)"[^>]*>([\s\S]*?)<\/p>/gi,
+			);
 
-    return vtt;
-}
+			for (const [, tStr, dStr, content] of pMatches) {
+				const start = +tStr / 1000;
+				const dur = +dStr / 1000;
+				const end = start + dur;
 
-    function srv3ToVttBlob(srv3Text) {
-      const lines = ["WEBVTT\n\n"];
+				const sMatches = [
+					...content.matchAll(/<s(?:\s+t="(\d+)")?[^>]*>(.*?)<\/s>/gi),
+				];
 
-      const pMatches = srv3Text.matchAll(
-        /<p\s+[^>]*t="(\d+)"\s+d="(\d+)"[^>]*>([\s\S]*?)<\/p>/gi
-      );
+				if (!sMatches.length) {
+					lines.push(`${fmtTime(start)} --> ${fmtTime(end)}`, "", "");
+					continue;
+				}
 
-      for (const [, tStr, dStr, content] of pMatches) {
-        const start = +tStr / 1000;
-        const dur = +dStr / 1000;
-        const end = start + dur;
+				const cueText = sMatches
+					.map(([, offsetStr, text], i) => {
+						if (!text) return "";
+						const abs = start + (+offsetStr || 0) / 1000;
+						return text + `<${fmtTime(abs)}>`;
+					})
+					.join("");
 
-        const sMatches = [
-          ...content.matchAll(/<s(?:\s+t="(\d+)")?[^>]*>(.*?)<\/s>/gi),
-        ];
+				lines.push(`${fmtTime(start)} --> ${fmtTime(end)}`, cueText, "");
+			}
 
-        if (!sMatches.length) {
-          lines.push(`${fmtTime(start)} --> ${fmtTime(end)}`, "", "");
-          continue;
-        }
+			return URL.createObjectURL(
+				new Blob([lines.join("\n")], { type: "text/vtt" }),
+			);
 
-        const cueText = sMatches
-          .map(([, offsetStr, text], i) => {
-            if (!text) return "";
-            const abs = start + (+offsetStr || 0) / 1000;
-            return text + `<${fmtTime(abs)}>`;
-          })
-          .join("");
+			function fmtTime(t) {
+				const h = Math.floor(t / 3600);
+				const m = Math.floor((t % 3600) / 60);
+				const s = Math.floor(t % 60);
+				const ms = Math.floor((t % 1) * 1000);
 
-        lines.push(`${fmtTime(start)} --> ${fmtTime(end)}`, cueText, "");
-      }
+				const pad = (n, len = 2) => String(n).padStart(len, "0");
+				return h
+					? `${pad(h)}:${pad(m)}:${pad(s)}.${String(ms).padStart(3, "0")}`
+					: `${pad(m)}:${pad(s)}.${String(ms).padStart(3, "0")}`;
+			}
+		}
+		// Try JSON3 first, fallback to VTT/SRV3
+		tryFetch("json3")
+			.then((json) => {
+				let json3;
+				try {
+					json3 = JSON.parse(json);
+				} catch {
+					json = json.replace(
+						/"utf8":\s*"([\s\S]*?)"/g,
+						(match, content) => {
+							const fixed = content.replace(/\n/g, "\\n"); // Fix newlines
+							return `"utf8": "${fixed}"`;
+						},
+					);
+					json3 = JSON.parse(json);
+				}
+				const blobUrl = URL.createObjectURL(
+					new Blob([json3ToVtt(json3)], { type: "text/vtt" }),
+				);
+				createTrack(blobUrl);
+			})
+			.catch(() =>
+				tryFetch("vtt")
+					.then((vttText) => {
+						// Modify VTT content
+						const modified = vttText
+							.replace(/Style:/g, "STYLE")
+							.replace(/##/g, "");
 
-      return URL.createObjectURL(
-        new Blob([lines.join("\n")], { type: "text/vtt" })
-      );
-
-      function fmtTime(t) {
-        const h = Math.floor(t / 3600);
-        const m = Math.floor((t % 3600) / 60);
-        const s = Math.floor(t % 60);
-        const ms = Math.floor((t % 1) * 1000);
-
-        const pad = (n, len = 2) => String(n).padStart(len, "0");
-        return h
-          ? `${pad(h)}:${pad(m)}:${pad(s)}.${String(ms).padStart(3, "0")}`
-          : `${pad(m)}:${pad(s)}.${String(ms).padStart(3, "0")}`;
-      }
-    }
-    // Try JSON3 first, fallback to VTT/SRV3
-    tryFetch("json3")
-  .then((json) => {
-    const json3 = JSON.parse(json.replace(/\\/g, "\\\\"));
-    const blobUrl = URL.createObjectURL(
-      new Blob([json3ToVtt(json3)],{ type: "text/vtt" })
-    );
-    createTrack(blobUrl);
-  })
-  .catch(() => 
-      tryFetch("vtt")
-    .then((vttText) => {
-      // Modify VTT content
-      const modified = vttText
-        .replace(/Style:/g, "STYLE")
-        .replace(/##/g, "");
-
-      const blobUrl = URL.createObjectURL(
-        new Blob([modified], { type: "text/vtt" })
-      );
-      createTrack(blobUrl);
-    })
-    .catch(() =>
-      tryFetch("srv3").then((txt) => {
-        console.log("SRV3 fallback");
-        createTrack(srv3ToVttBlob(txt));
-      })
-    )
-  );
-  }
+						const blobUrl = URL.createObjectURL(
+							new Blob([modified], { type: "text/vtt" }),
+						);
+						createTrack(blobUrl);
+					})
+					.catch(() =>
+						tryFetch("srv3").then((txt) => {
+							console.log("SRV3 fallback");
+							createTrack(srv3ToVttBlob(txt));
+						}),
+					),
+			);
+	}
 });
 
 po.observe({ type: "resource", buffered: true });
