@@ -136,26 +136,8 @@ function json3ToVtt(json) {
 	log("Total pens:", pens.length);
 	log("Pen data (first 3):", pens.slice(0, 3));
 
-	// ---------- build CSS from pens ----------
-	let style = `WEBVTT
-
-STYLE
-::cue(v), ::cue(c) { font-family: "YouTube Noto", Roboto, Arial, Helvetica, Verdana, "PT Sans Caption", sans-serif; }
-`;
-
-	for (let i = 0; i < pens.length; i++) {
-		const pen = pens[i];
-		if (!pen || Object.keys(pen).length === 0) continue;
-
-		const css = penToCss(pen);
-		style += `::cue(.pen${i}) { ${css} }\n`;
-	}
-
-	log("STYLE block generated", { lines: style.split("\n").length });
-	style += "\n";
-
-	// ---------- build cues ----------
-	let vtt = style;
+	// ---------- build cues (no STYLE block for iOS compatibility) ----------
+	let vtt = "WEBVTT\n\n";
 
 	for (const ev of events) {
 		if (!ev.segs?.length) continue;
@@ -173,11 +155,35 @@ STYLE
 				parts.push(text);
 				continue;
 			}
-			parts.push(`<c.pen${penId}>${text}</c>`);
+			
+			// Inline styles for iOS compatibility
+			const pen = pens[penId];
+			let style = "";
+			if (pen) {
+				const css = penToCss(pen);
+				// Convert CSS properties to inline style
+				const inlineStyles = css.split(';').filter(s => s.trim()).map(s => {
+					const [prop, val] = s.split(':').map(x => x.trim());
+					return `${prop}:${val}`;
+				}).join(';');
+				style = ` style="${inlineStyles}"`;
+			}
+			
+			parts.push(`<span${style}>${text}</span>`);
 		}
 		if (ev.pPenId) {
-			parts.unshift(`<v.pen${ev.pPenId}>`);
-			parts.push(`</v>`);
+			const pen = pens[ev.pPenId];
+			let style = "";
+			if (pen) {
+				const css = penToCss(pen);
+				const inlineStyles = css.split(';').filter(s => s.trim()).map(s => {
+					const [prop, val] = s.split(':').map(x => x.trim());
+					return `${prop}:${val}`;
+				}).join(';');
+				style = ` style="${inlineStyles}"`;
+			}
+			parts.unshift(`<span${style}>`);
+			parts.push(`</span>`);
 		}
 
 		if (!parts.length) continue;
@@ -248,9 +254,10 @@ const po = new PerformanceObserver((list) => {
 				setTimeout(() => {
 					log("Track cues loaded:", track.cues?.length || 0);
 					if (track.cues?.length > 0) {
-						log("First cue text:", track.cues[0].text?.substring(0, 100));
+						log("First cue text:", track.cues[0].text?.substring(0, 200));
+						log("First cue start/end:", track.cues[0].startTime, track.cues[0].endTime);
 					}
-				}, 500);
+				}, 1000); // Increased timeout to ensure cues are loaded
 			} catch (e) {
 				log("Error checking cues:", e.message);
 			}
