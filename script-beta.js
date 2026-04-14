@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Fix MWeb Youtube Fullscreen Captions
 // @author       Sukinyu
-// @version      0.3.20
+// @version      0.3.21
 // @last         4/14/2026 (mm/dd/yyyy)
 // @description  Fix captions on youtube videos in fullscreen mode on iOS (https://m.youtube.com/watch?). Injects a captions track with user-preferred language.
 // @match        https://m.youtube.com/watch?*
@@ -95,7 +95,7 @@ function penToCss(pen) {
 		const v = rd(Math.max(2 * scale, 1), 4);
 		const w = rd(Math.max(3 * scale, 1), 4);
 
-		let eC = pen.ecEdgeColor ? `rgb(${rgb(pen.ecEdgeColor)})` : null;
+		let eC = pen.ecEdgeColor != null ? `rgb(${rgb(pen.ecEdgeColor)})` : null;
 		let darkShadow = eC ?? `rgba(34, 34, 34, ${foreAlpha})`;
 		let lightShadow = eC ?? `rgba(204, 204, 204, ${foreAlpha})`;
 		switch (edgeType) {
@@ -174,8 +174,8 @@ STYLE
 
 		if (posId > 0 && wpWinPositions[posId]) {
 			const pos = wpWinPositions[posId];
-			let horPos = pos.ahHorPos;
-			let verPos = Math.max(0, pos.avVerPos != null ? pos.avVerPos - 2.1 : 2.1);
+			let horPos = rd(15.5 + (pos.ahHorPos / 100) * 69, 2);
+			let verPos = Math.max(0, pos.avVerPos != null ? pos.avVerPos - 2 : 2);
 			let anchorPoint = pos.apPoint;
 
 			// SRV3 AnchorPoint values:
