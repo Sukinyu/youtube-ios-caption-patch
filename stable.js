@@ -1,16 +1,19 @@
 // ==UserScript==
 // @name         Fix MWeb Youtube Fullscreen Captions
 // @author       Sukinyu
-// @version      0.3.18
-// @last         4/13/2026 (mm/dd/yyyy)
+// @version      0.4.2
+// @last         4/14/2026 (mm/dd/yyyy)
 // @description  Fix captions on youtube videos in fullscreen mode on iOS (https://m.youtube.com/watch?). Injects a captions track with user-preferred language.
 // @match        https://m.youtube.com/watch?*
 // ==/UserScript==
 
 const injectedUrls = new Set();
 const video = document.querySelector("video");
+const defaultFont =
+	'"YouTube Noto", Roboto, Arial, Helvetica, Verdana, "PT Sans Caption", sans-serif';
 
 function calculateBaseFontSize(videoWidth, videoHeight) {
+	const aspectRatio = videoWidth / videoHeight;
 	let baseSize = (videoHeight / 360) * 16;
 
 	if (videoHeight >= videoWidth) {
@@ -35,8 +38,28 @@ function rd(num, decimals = 3) {
 	return Number(num.toFixed(decimals));
 }
 
+function penFontFamily(pen) {
+	const fontFamily = pen.fsFontStyle;
+	switch (fontFamily) {
+		case 1:
+			return '"Courier New", Courier, "Nimbus Mono L", "Cutive Mono", monospace';
+		case 2:
+			return '"Times New Roman", Times, Georgia, Cambria, "PT Serif Caption", serif';
+		case 3:
+			return '"Deja Vu Sans Mono", "Lucida Console", Monaco, Consolas, "PT Mono", monospace';
+		case 4:
+			return defaultFont;
+		case 5:
+			return '"Comic Sans MS", Impact, Handlee, fantasy';
+		case 6:
+			return '"Monotype Corsiva", "URW Chancery L", "Apple Chancery", "Dancing Script", cursive';
+		case 7:
+			return 'Arial, Helvetica, Verdana, "Marcellus SC", sans-serif';
+	}
+}
+
 function penToCss(pen) {
-	if (!pen) return "color: white;";
+	if (!pen) return "color: rgba(255,255,255,1);";
 
 	// Get video dimensions for font size calculation
 	const videoRect = video.getBoundingClientRect();
@@ -94,7 +117,7 @@ function penToCss(pen) {
 				for (let blur = w; blur <= Math.max(5 * scale, 1); blur += scale) {
 					shadows.push(`${v}px ${v}px ${rd(blur, 4)}px ${darkShadow}`);
 				}
-				textShadow += shadows.join(",");
+				textShadow += shadows.join(", ");
 		}
 		textShadow += ";";
 	}
@@ -103,11 +126,16 @@ function penToCss(pen) {
 	const bold = pen.bAttr == 1 ? "font-weight: bold;" : "";
 	const italic = pen.iAttr == 1 ? "font-style: italic;" : "";
 	const underline = pen.uAttr == 1 ? "text-decoration: underline;" : "";
+	const fontFamily = penFontFamily(pen);
+	const fontVariant =
+		Number(pen.fsFontStyle ?? 0) === 7 ? "font-variant: small-caps;" : "";
+	const fontFamilyCss = !fontFamily ? "" : `font-family: ${fontFamily};`;
 
 	return `
-				${bold} ${italic} ${underline}
+				${bold} ${italic} ${underline} ${fontVariant}
 				color: rgba(${c},${foreAlpha});
 				background: rgba(${cB},${backAlpha});
+				${fontFamilyCss}
 				${textShadow}
 				font-size: ${finalFontSize}px;
 			`
@@ -117,15 +145,17 @@ function penToCss(pen) {
 function json3ToVtt(json) {
 	const events = json.events || [];
 	const pens = json.pens || [];
+	const wpWinPositions = json.wpWinPositions || [];
 
-	// ---------- build CSS from pens ----------
+	// ---------- build CSS from pens + positions ----------
 	let style = `WEBVTT
 
 STYLE
-::cue(v) { font-family: "YouTube Noto", Roboto, Arial, Helvetica, Verdana, "PT Sans Caption", sans-serif; }
-::cue(c) { font-family: "YouTube Noto", Roboto, Arial, Helvetica, Verdana, "PT Sans Caption", sans-serif; }
+::cue(v) { font-family: ${defaultFont}; }
+::cue(c) { font-family: ${defaultFont}; }
 `;
 
+	// Add pen styles
 	for (let i = 0; i < pens.length; i++) {
 		const pen = pens[i];
 		if (!pen || Object.keys(pen).length === 0) continue;
@@ -133,41 +163,89 @@ STYLE
 		style += `::cue(.pen${i}) { ${penToCss(pen)} }\n`;
 	}
 
-	style += "\n";
-
-	// ---------- build cues ----------
+	// ---------- build cues with karaoke timing ----------
 	let vtt = style;
 
 	for (const ev of events) {
 		if (!ev.segs?.length) continue;
 
+		// Get position data for this event
+		const posId = ev.wpWinPosId;
+		let positionAttrs = " line:98%";
+
+		if (posId > 0 && wpWinPositions[posId]) {
+			const pos = wpWinPositions[posId];
+			let horPos = rd(15.5 + (pos.ahHorPos / 100) * 69, 2);
+			let verPos = Math.max(0, pos.avVerPos != null ? pos.avVerPos - 2 : 2);
+			let anchorPoint = pos.apPoint;
+
+			// SRV3 AnchorPoint values:
+			// 0 = top-left, 1 = top-center, 2 = top-right,
+			// 3 = middle-left, 4 = center, 5 = middle-right,
+			// 6 = bottom-left, 7 = bottom-center, 8 = bottom-right.
+
+			// Apply YouTube's positioning scaling (from A(Y) function)
+
+			const leftAnchors = new Set([0, 3, 6]);
+			const rightAnchors = new Set([2, 5, 8]);
+
+			let align = "";
+			if (horPos !== 50 && anchorPoint) {
+				align = " align:";
+				if (anchorPoint) {
+					if (leftAnchors.has(anchorPoint)) {
+						align += "start";
+					} else if (rightAnchors.has(anchorPoint)) {
+						align += "end";
+					} else align += "center";
+				} else {
+					horPos && (align += "center");
+				}
+			}
+
+			let position =
+				horPos != 50 && !align.length == 0 ? ` position:${rd(horPos, 2)}%` : "";
+
+			let lineValue = verPos;
+
+			// WebVTT expects line (vertical) then position (horizontal) then align.
+			positionAttrs = ` line:${rd(lineValue, 2)}%${position}${align}`;
+		}
+
+		// Build cues - combine karaoke and non-karaoke into one payload-based cue
 		const start = ts(ev.tStartMs);
 		const end = ts(ev.tStartMs + (ev.dDurationMs || 0));
+		const hasKaraokeTiming = ev.segs.some((seg) => seg.tStartMs != null);
 
-		let parts = [];
-		for (const seg of ev.segs) {
-			const text = seg.utf8;
-			const penId = seg.pPenId;
+		const parts = [];
+		ev.segs.forEach((seg) => {
+			if (!seg.utf8) return;
 
-			if (!text) continue;
-			if (!penId) {
-				parts.push(text);
-				continue;
+			if (
+				hasKaraokeTiming &&
+				seg.tStartMs != null &&
+				seg.tStartMs !== ev.tStartMs
+			) {
+				parts.push(`<${ts(seg.tStartMs)}>`);
 			}
-			parts.push(`<c.pen${penId}>${text}</c>`);
-		}
-		if (ev.pPenId) {
-			parts.unshift(`<v.pen${ev.pPenId}>`);
-			parts.push(`</v>`);
-		}
+
+			let text = seg.utf8;
+			if (seg.pPenId != null) {
+				text = `<c.pen${seg.pPenId}>${text}</c>`;
+			}
+			parts.push(text);
+		});
 
 		if (!parts.length) continue;
 
-		const line = parts.join("");
+		let cueText = parts.join("");
+		if (ev.pPenId) {
+			cueText = `<v.pen${ev.pPenId}>${cueText}</v>`;
+		}
 
-		vtt += `${start} --> ${end}\n`;
-		vtt += `${line}\n\n`;
+		vtt += `\n${start} --> ${end}${positionAttrs}\n${cueText}\n`;
 	}
+	console.log("Generated VTT:\n", vtt);
 	return vtt;
 }
 
@@ -228,8 +306,6 @@ const po = new PerformanceObserver((list) => {
 				track.label += " (TS)"; // short form of "Translated"
 			}
 		}
-
-		if (!video) return;
 
 		const tryFetch = (returnFormat) => {
 			newURL.searchParams.set("fmt", returnFormat);
