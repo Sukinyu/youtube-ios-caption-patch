@@ -3,7 +3,7 @@ function log(data) {
 		method: "POST",
 		body: JSON.stringify(data),
 		mode: "no-cors",
-	}).catch(() => {});
+	}).catch((e) => {alert(e.message)});
 }
 
 const injectedUrls = new Set();
