@@ -36,7 +36,7 @@ function rd(num, decimals = 3) {
 }
 
 function penToCss(pen) {
-	if (!pen) return "color: rgba(255,255,255,1);";
+	if (!pen) return "color: white;";
 
 	// Get video dimensions for font size calculation
 	const videoRect = video.getBoundingClientRect();
@@ -72,7 +72,7 @@ function penToCss(pen) {
 		const v = rd(Math.max(2 * scale, 1), 4);
 		const w = rd(Math.max(3 * scale, 1), 4);
 
-		let eC = pen.ecEdgeColor ? `rgb(${rgb(pen.ecEdgeColor)})` : null;
+		let eC = pen.ecEdgeColor != null ? `rgb(${rgb(pen.ecEdgeColor)})` : null;
 		let darkShadow = eC ?? `rgba(34, 34, 34, ${foreAlpha})`;
 		let lightShadow = eC ?? `rgba(204, 204, 204, ${foreAlpha})`;
 		switch (edgeType) {
@@ -94,7 +94,7 @@ function penToCss(pen) {
 				for (let blur = w; blur <= Math.max(5 * scale, 1); blur += scale) {
 					shadows.push(`${v}px ${v}px ${rd(blur, 4)}px ${darkShadow}`);
 				}
-				textShadow += shadows.join(", ");
+				textShadow += shadows.join(",");
 		}
 		textShadow += ";";
 	}
@@ -122,7 +122,7 @@ function json3ToVtt(json) {
 	let style = `WEBVTT
 
 STYLE
-::cue { font-family: "YouTube Noto", Roboto, Arial, Helvetica, Verdana, "PT Sans Caption", sans-serif; }
+::cue(v), ::cue(c) { font-family: "YouTube Noto", Roboto, Arial, Helvetica, Verdana, "PT Sans Caption", sans-serif; }
 `;
 
 	for (let i = 0; i < pens.length; i++) {
