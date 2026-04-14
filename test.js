@@ -1,4 +1,4 @@
-function log(data) {
+function log(...data) {
 	alert(data);
 }
 
@@ -115,14 +115,9 @@ function json3ToVtt(json) {
 
 	// Log video dimensions and pen count for debugging
 	const videoRect = video?.getBoundingClientRect();
-	log({
-		"Video dimensions": {
-			width: videoRect?.width,
-			height: videoRect?.height,
-		},
-	});
-	log({ "Total pens": pens.length });
-	log({ "Pen data (first 3)": pens.slice(0, 3) });
+	log("Video dimensions", videoRect?.width, videoRect?.height);
+	log("Total pens", pens.length);
+	log("Pen data (first 3)", pens.slice(0, 3));
 
 	// ---------- build CSS from pens ----------
 	let style = `WEBVTT
@@ -139,7 +134,7 @@ STYLE
 		style += `::cue(.pen${i}) { ${css} }\n`;
 	}
 
-	log({ msg: "STYLE block generated", lines: style.split("\n").length });
+	log("STYLE block generated", style.split("\n").length);
 	style += "\n";
 
 	// ---------- build cues ----------
@@ -175,7 +170,7 @@ STYLE
 		vtt += `${start} --> ${end}\n`;
 		vtt += `${line}\n\n`;
 	}
-	log({"VTT output (first 500 chars)": vtt.substring(0, 500)});
+	log("VTT output (first 500 chars)", vtt.substring(0, 500));
 	return vtt;
 }
 
@@ -185,7 +180,7 @@ const po = new PerformanceObserver((list) => {
 		if (!url.includes("/api/timedtext") || injectedUrls.has(url)) continue;
 		injectedUrls.add(url);
 
-		log({"Caption request detected": url});
+		log("Caption request detected", url);
 		let newURL = new URL(url);
 		const removeParams = [
 			"potc",
@@ -217,10 +212,10 @@ const po = new PerformanceObserver((list) => {
 			if (track) {
 				if (track.src.startsWith("blob:")) {
 					URL.revokeObjectURL(track.src);
-					log({msg: "Revoked old blob URL"});
+					log("Revoked old blob URL");
 				}
 				track.src = vttUrl;
-				log({msg:"Updated captions track"});
+				log("Updated captions track");
 			} else {
 				track = document.createElement("track");
 				track.kind = "captions";
@@ -230,18 +225,18 @@ const po = new PerformanceObserver((list) => {
 				track.default = true;
 				track.setAttribute("data-injected", "");
 				video.appendChild(track);
-				log({msg:"Injected captions track"});
+				log("Injected captions track");
 			}
 			try {
 				setTimeout(() => {
-					log({"Track cues loaded": track.cues?.length || 0});
+					log("Track cues loaded", track.cues?.length || 0);
 					if (track.cues?.length > 0) {
-						log({"First cue text": track.cues[0].text?.substring(0, 100)});
+						log({ "First cue text": track.cues[0].text?.substring(0, 100) });
 					}
 				}, 1000);
-				log({"track": track});
+				log("track:", track);
 			} catch (e) {
-				log({"Error checking cues": e.message});
+				log("Error checking cues", e.message);
 			}
 			if (translated) {
 				track.label += " (TS)";
