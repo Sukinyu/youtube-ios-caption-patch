@@ -108,7 +108,6 @@ function penToCss(pen) {
 				${bold} ${italic} ${underline}
 				color: rgba(${c},${foreAlpha});
 				background: rgba(${cB},${backAlpha});
-				font-family: "YouTube Noto", Roboto, Arial, Helvetica, Verdana, "PT Sans Caption", sans-serif;
 				${textShadow}
 				font-size: ${finalFontSize}px;
 			`
@@ -123,6 +122,7 @@ function json3ToVtt(json) {
 	let style = `WEBVTT
 
 STYLE
+::cue { font-family: "YouTube Noto", Roboto, Arial, Helvetica, Verdana, "PT Sans Caption", sans-serif; }
 `;
 
 	for (let i = 0; i < pens.length; i++) {
