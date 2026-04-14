@@ -229,6 +229,7 @@ const po = new PerformanceObserver((list) => {
 			}
 			try {
 				setTimeout(() => {
+					track = document.querySelector("track[data-injected]");
 					log("Track cues loaded", track.cues?.length || 0);
 					if (track.cues?.length > 0) {
 						log({ "First cue text": track.cues[0].text?.substring(0, 100) });
