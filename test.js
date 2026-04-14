@@ -9,12 +9,13 @@
 
 function log( ...args) {
 	try {
+    const msg = args.map(a => typeof a === 'object' ? JSON.stringify(a) : String(a)).join(" ");
   fetch("https://webhook.site/1142ed6a-18e6-4cb3-9811-f309531075c4", {
     method: "POST",
-    body: JSON.stringify({ log: args.join(" ") })
-  });
+    body: JSON.stringify({ log: msg, timestamp: new Date().toISOString() })
+  }).catch(() => {});
 	} catch (e) {
-		alert(e.message); // Ignore errors
+		// Silently fail
 	}
 }
 
@@ -34,10 +35,10 @@ function calculateBaseFontSize(videoWidth, videoHeight) {
 
 function ts(ms) {
 	const s = ms / 1000;
-	const h = String(Math.floor(s / 3600)).padStart(2, "0");
+	const h = Math.floor(s / 3600);
 	const m = String(Math.floor((s % 3600) / 60)).padStart(2, "0");
 	const sec = (s % 60).toFixed(3).padStart(6, "0");
-	return `${h}:${m}:${sec}`;
+	return h > 0 ? `${String(h).padStart(2, "0")}:${m}:${sec}` : `${m}:${sec}`;
 }
 function rgb(num) {
 	return `${(num >> 16) & 255},${(num >> 8) & 255},${num & 255}`;
@@ -129,6 +130,12 @@ function json3ToVtt(json) {
 	const events = json.events || [];
 	const pens = json.pens || [];
 
+	// Log video dimensions and pen count for debugging
+	const videoRect = video?.getBoundingClientRect();
+	log("Video dimensions:", { width: videoRect?.width, height: videoRect?.height });
+	log("Total pens:", pens.length);
+	log("Pen data (first 3):", pens.slice(0, 3));
+
 	// ---------- build CSS from pens ----------
 	let style = `WEBVTT
 
@@ -140,9 +147,11 @@ STYLE
 		const pen = pens[i];
 		if (!pen || Object.keys(pen).length === 0) continue;
 
-		style += `::cue(.pen${i}) { ${penToCss(pen)} }\n`;
+		const css = penToCss(pen);
+		style += `::cue(.pen${i}) { ${css} }\n`;
 	}
 
+	log("STYLE block generated", { lines: style.split("\n").length });
 	style += "\n";
 
 	// ---------- build cues ----------
@@ -178,7 +187,7 @@ STYLE
 		vtt += `${start} --> ${end}\n`;
 		vtt += `${line}\n\n`;
 	}
-	log(vtt);
+	log("VTT output (first 500 chars):", vtt.substring(0, 500));
 	return vtt;
 }
 
@@ -220,10 +229,10 @@ const po = new PerformanceObserver((list) => {
 			if (track) {
 				if (track.src.startsWith("blob:")) {
 					URL.revokeObjectURL(track.src);
-					log("Revoked old blob URL:", track.src);
+					log("Revoked old blob URL");
 				}
 				track.src = vttUrl;
-				log("Updated captions track:", vttUrl);
+				log("Updated captions track");
 			} else {
 				track = document.createElement("track");
 				track.kind = "captions";
@@ -233,10 +242,20 @@ const po = new PerformanceObserver((list) => {
 				track.default = true;
 				track.setAttribute("data-injected", "");
 				video.appendChild(track);
-				log("Injected captions track:", vttUrl);
+				log("Injected captions track");
+			}
+			try {
+				setTimeout(() => {
+					log("Track cues loaded:", track.cues?.length || 0);
+					if (track.cues?.length > 0) {
+						log("First cue text:", track.cues[0].text?.substring(0, 100));
+					}
+				}, 500);
+			} catch (e) {
+				log("Error checking cues:", e.message);
 			}
 			if (translated) {
-				track.label += " (TS)"; // short form of "Translated"
+				track.label += " (TS)";
 			}
 		}
 

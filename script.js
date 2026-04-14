@@ -23,10 +23,10 @@ function calculateBaseFontSize(videoWidth, videoHeight) {
 
 function ts(ms) {
 	const s = ms / 1000;
-	const h = String(Math.floor(s / 3600)).padStart(2, "0");
+	const h = Math.floor(s / 3600);
 	const m = String(Math.floor((s % 3600) / 60)).padStart(2, "0");
 	const sec = (s % 60).toFixed(3).padStart(6, "0");
-	return `${h}:${m}:${sec}`;
+	return h > 0 ? `${String(h).padStart(2, "0")}:${m}:${sec}` : `${m}:${sec}`;
 }
 function rgb(num) {
 	return `${(num >> 16) & 255},${(num >> 8) & 255},${num & 255}`;
@@ -135,7 +135,7 @@ STYLE
 	style += "\n";
 
 	// ---------- build cues ----------
-	let vtt = style;
+	vtt = style;
 
 	for (const ev of events) {
 		if (!ev.segs?.length) continue;
