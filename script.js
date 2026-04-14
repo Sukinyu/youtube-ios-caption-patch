@@ -257,7 +257,8 @@ const po = new PerformanceObserver((list) => {
 				);
 				createTrack(blobUrl);
 			})
-			.catch(() =>
+			.catch((err) => {
+				alert(err.message);
 				tryFetch("vtt").then((vttText) => {
 					// Modify VTT content
 					const modified = vttText
@@ -268,8 +269,8 @@ const po = new PerformanceObserver((list) => {
 						new Blob([modified], { type: "text/vtt" }),
 					);
 					createTrack(blobUrl);
-				}),
-			);
+				});
+			});
 	}
 });
 
