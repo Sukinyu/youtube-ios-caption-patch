@@ -332,7 +332,8 @@ const po = new PerformanceObserver((list) => {
 					new Blob([json3ToVtt(json3)], { type: "text/vtt" }),
 				);
 				createTrack(blobUrl);
-			});
+			})
+		.catch((err) => {alert(err.message)});
 	}
 });
 
