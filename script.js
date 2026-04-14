@@ -135,7 +135,7 @@ STYLE
 	style += "\n";
 
 	// ---------- build cues ----------
-	vtt = style;
+	let vtt = style;
 
 	for (const ev of events) {
 		if (!ev.segs?.length) continue;
@@ -258,7 +258,7 @@ const po = new PerformanceObserver((list) => {
 				createTrack(blobUrl);
 			})
 			.catch((err) => {
-				alert(err.message);
+				alert(err.message + "\nFalling back to VTT format.");
 				tryFetch("vtt").then((vttText) => {
 					// Modify VTT content
 					const modified = vttText
