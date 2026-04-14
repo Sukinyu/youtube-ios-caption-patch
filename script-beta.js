@@ -9,6 +9,8 @@
 
 const injectedUrls = new Set();
 const video = document.querySelector("video");
+const defaultFontFamily =
+	'"YouTube Noto", Roboto, Arial, Helvetica, Verdana, "PT Sans Caption", sans-serif';
 
 function calculateBaseFontSize(videoWidth, videoHeight) {
 	const aspectRatio = videoWidth / videoHeight;
@@ -24,16 +26,38 @@ function calculateBaseFontSize(videoWidth, videoHeight) {
 
 function ts(ms) {
 	const s = ms / 1000;
-	const h = String(Math.floor(s / 3600)).padStart(2, "0");
+	const h = Math.floor(s / 3600);
 	const m = String(Math.floor((s % 3600) / 60)).padStart(2, "0");
 	const sec = (s % 60).toFixed(3).padStart(6, "0");
-	return `${h}:${m}:${sec}`;
+	return h > 0 ? `${String(h).padStart(2, "0")}:${m}:${sec}` : `${m}:${sec}`;
 }
 function rgb(num) {
 	return `${(num >> 16) & 255},${(num >> 8) & 255},${num & 255}`;
 }
 function rd(num, decimals = 3) {
 	return Number(num.toFixed(decimals));
+}
+
+function penFontFamily(pen) {
+	const fontFamily = pen.fsFontStyle;
+	switch (fontFamily) {
+		case 1:
+			return '"Courier New", Courier, "Nimbus Mono L", "Cutive Mono", monospace';
+		case 2:
+			return '"Times New Roman", Times, Georgia, Cambria, "PT Serif Caption", serif';
+		case 3:
+			return '"Deja Vu Sans Mono", "Lucida Console", Monaco, Consolas, "PT Mono", monospace';
+		case 5:
+			return '"Comic Sans MS", Impact, Handlee, fantasy';
+		case 6:
+			return '"Monotype Corsiva", "URW Chancery L", "Apple Chancery", "Dancing Script", cursive';
+		case 7:
+			return 'Arial, Helvetica, Verdana, "Marcellus SC", sans-serif';
+		case 0:
+		case 4:
+		default:
+			return defaultFontFamily;
+	}
 }
 
 function penToCss(pen) {
@@ -104,12 +128,17 @@ function penToCss(pen) {
 	const bold = pen.bAttr == 1 ? "font-weight: bold;" : "";
 	const italic = pen.iAttr == 1 ? "font-style: italic;" : "";
 	const underline = pen.uAttr == 1 ? "text-decoration: underline;" : "";
+	const fontFamily = penFontFamily(pen);
+	const fontVariant =
+		Number(pen.fsFontStyle ?? 0) === 7 ? "font-variant: small-caps;" : "";
+	const fontFamilyCss =
+		fontFamily === defaultFontFamily ? "" : `font-family: ${fontFamily};`;
 
 	return `
-				${bold} ${italic} ${underline}
+				${bold} ${italic} ${underline} ${fontVariant}
 				color: rgba(${c},${foreAlpha});
 				background: rgba(${cB},${backAlpha});
-				font-family: "YouTube Noto", Roboto, Arial, Helvetica, Verdana, "PT Sans Caption", sans-serif;
+				${fontFamilyCss}
 				${textShadow}
 				font-size: ${finalFontSize}px;
 			`
@@ -125,6 +154,7 @@ function json3ToVtt(json) {
 	let style = `WEBVTT
 
 STYLE
+::cue { font-family: ${defaultFontFamily}; }
 `;
 
 	// Add pen styles
@@ -135,49 +165,6 @@ STYLE
 		style += `::cue(.pen${i}) { ${penToCss(pen)} }\n`;
 	}
 
-	// Add position styles (though WebVTT positioning uses attributes, keeping for compatibility)
-	for (let i = 0; i < wpWinPositions.length; i++) {
-		const pos = wpWinPositions[i];
-		if (!pos || Object.keys(pos).length === 0) continue;
-
-		// For WebVTT, positioning is handled via attributes on cue timestamps
-		// But we'll keep CSS for any additional styling if needed
-		let positionCss = `position: absolute; `;
-		
-		// Horizontal positioning
-		const horPos = pos.ahHorPos != null ? pos.ahHorPos : 50;
-		positionCss += `left: ${horPos}%; `;
-		positionCss += `transform: translateX(-50%); `;
-		
-		// Vertical positioning
-		const verPos = pos.avVerPos != null ? pos.avVerPos : 85;
-		positionCss += `top: ${verPos}%; `;
-		
-		// Anchor point determines alignment
-		const anchorPoint = pos.apPoint ?? 7;
-		switch (anchorPoint) {
-			case 1: // Top-left
-				positionCss = positionCss.replace(`transform: translateX(-50%);`, ``);
-				positionCss += `text-align: left; `;
-				break;
-			case 3: // Top-right
-				positionCss = positionCss.replace(`transform: translateX(-50%);`, `transform: translateX(-100%);`);
-				positionCss += `text-align: right; `;
-				break;
-			case 7: // Center (default)
-				positionCss += `text-align: center; `;
-				break;
-			case 9: // Bottom-right
-				positionCss = positionCss.replace(`transform: translateX(-50%);`, `transform: translateX(-100%);`);
-				positionCss += `text-align: right; `;
-				break;
-		}
-
-		style += `::cue(.pos${i}) { ${positionCss}}\n`;
-	}
-
-	style += "\n";
-
 	// ---------- build cues with karaoke timing ----------
 	vtt = style;
 
@@ -185,82 +172,72 @@ STYLE
 		if (!ev.segs?.length) continue;
 
 		// Get position data for this event
-		const posId = ev.wpWinPosId ?? 0;
-		let positionAttrs = "";
-		
+		const posId = ev.wpWinPosId;
+		let positionAttrs = "line:97.9%";
+
 		if (posId > 0 && wpWinPositions[posId]) {
 			const pos = wpWinPositions[posId];
-			const horPos = pos.ahHorPos != null ? pos.ahHorPos : 50;
-			const verPos = pos.avVerPos != null ? pos.avVerPos : 85;
-			const anchorPoint = pos.apPoint ?? 7;
-			
-			// WebVTT position attributes
-			positionAttrs = ` position:${horPos}% line:${verPos}%`;
-			
-			// Add alignment based on anchor point
-			switch (anchorPoint) {
-				case 1: // Top-left
-					positionAttrs += ` align:start`;
-					break;
-				case 3: // Top-right
-					positionAttrs += ` align:end`;
-					break;
-				case 7: // Center (default)
-					positionAttrs += ` align:middle`;
-					break;
-				case 9: // Bottom-right
-					positionAttrs += ` align:end`;
-					break;
-			}
+			let horPos = pos.ahHorPos;
+			let verPos = pos.avVerPos != null ? pos.avVerPos - 2.1 : 2.1;
+			let anchorPoint = pos.apPoint ?? 7;
+
+			// SRV3 AnchorPoint values:
+			// 0 = top-left, 1 = top-center, 2 = top-right,
+			// 3 = middle-left, 4 = center, 5 = middle-right,
+			// 6 = bottom-left, 7 = bottom-center, 8 = bottom-right.
+
+			// Apply YouTube's positioning scaling (from A(Y) function)
+
+			const leftAnchors = new Set([0, 3, 6]);
+			const rightAnchors = new Set([2, 5, 8]);
+
+			let align = " align:";
+			if (leftAnchors.has(anchorPoint)) {
+				align += "start";
+			} else if (rightAnchors.has(anchorPoint)) {
+				align += "end";
+			} else horPos != 50 && (align += "center");
+
+			let lineValue = 100 - verPos;
+
+			// WebVTT expects line (vertical) then position (horizontal) then align.
+			positionAttrs = ` line:${rd(lineValue, 2)}% position:${rd(horPosScaled, 2)}%${align}`;
 		}
 
-		// Check if this event has karaoke timing (progressive text reveal)
-		const hasKaraokeTiming = ev.segs.some(seg => seg.tStartMs != null);
-		
-		if (hasKaraokeTiming) {
-			// Build karaoke cues with individual segment timing
-			for (const seg of ev.segs) {
-				if (!seg.utf8) continue;
+		// Build cues - combine karaoke and non-karaoke into one payload-based cue
+		const start = ts(ev.tStartMs);
+		const end = ts(ev.tStartMs + (ev.dDurationMs || 0));
+		const hasKaraokeTiming = ev.segs.some((seg) => seg.tStartMs != null);
 
-				const segStart = ts(seg.tStartMs ?? ev.tStartMs);
-				const segEnd = ts((seg.tStartMs ?? ev.tStartMs) + (seg.dDurationMs ?? ev.dDurationMs ?? 0));
-				
-				const penId = seg.pPenId;
-				let text = seg.utf8;
+		const parts = [];
+		ev.segs.forEach((seg) => {
+			if (!seg.utf8) return;
 
-				if (penId != null) {
-					text = `<c.pen${penId}>${text}</c>`;
-				}
-
-				vtt += `${segStart} --> ${segEnd}${positionAttrs}\n`;
-				vtt += `${text}\n\n`;
-			}
-		} else {
-			// Standard non-karaoke cue with all segments
-			const start = ts(ev.tStartMs);
-			const end = ts(ev.tStartMs + (ev.dDurationMs || 0));
-
-			let parts = [];
-			for (const seg of ev.segs) {
-				const text = seg.utf8;
-				const penId = seg.pPenId;
-
-				if (!text) continue;
-				if (!penId) {
-					parts.push(text);
-					continue;
-				}
-				parts.push(`<c.pen${penId}>${text}</c>`);
+			if (
+				hasKaraokeTiming &&
+				seg.tStartMs != null &&
+				seg.tStartMs !== ev.tStartMs
+			) {
+				parts.push(`<${ts(seg.tStartMs)}>`);
 			}
 
-			if (!parts.length) continue;
+			let text = seg.utf8;
+			if (seg.pPenId != null) {
+				text = `<c.pen${seg.pPenId}>${text}</c>`;
+			}
+			parts.push(text);
+		});
 
-			const line = parts.join("");
+		if (!parts.length) continue;
 
-			vtt += `${start} --> ${end}${positionAttrs}\n`;
-			vtt += `${line}\n\n`;
+		let cueText = parts.join("");
+		if (ev.pPenId) {
+			cueText = `<v.pen${ev.pPenId}>${cueText}</v>`;
 		}
+
+		vtt += `${start} --> ${end}${positionAttrs}\n${cueText}\n\n`;
 	}
+	console.log("Generated VTT:\n", vtt);
 	return vtt;
 }
 
@@ -321,8 +298,6 @@ const po = new PerformanceObserver((list) => {
 				track.label += " (TS)"; // short form of "Translated"
 			}
 		}
-
-		if (!video) return;
 
 		const tryFetch = (returnFormat) => {
 			newURL.searchParams.set("fmt", returnFormat);
