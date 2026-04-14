@@ -171,7 +171,7 @@ STYLE
 
 		// Get position data for this event
 		const posId = ev.wpWinPosId;
-		let positionAttrs = "line:97.9%";
+		let positionAttrs = " line:98%";
 
 		if (posId > 0 && wpWinPositions[posId]) {
 			const pos = wpWinPositions[posId];
@@ -334,7 +334,28 @@ const po = new PerformanceObserver((list) => {
 				);
 				createTrack(blobUrl);
 			})
-		.catch((err) => {alert(err.message)});
+			.catch((err) => {
+				console.log("JSON3 failed:", err.message);
+				// Try VTT fallback
+				tryFetch("vtt").then((vttText) => {
+					console.log("VTT response received, length:", vttText.length);
+					if (!vttText || vttText.length < 10) {
+						throw new Error("Empty or invalid VTT response");
+					}
+					// Modify VTT content
+					const modified = vttText
+						.replace(/Style:/g, "STYLE")
+						.replace(/##/g, "");
+
+					const blobUrl = URL.createObjectURL(
+						new Blob([modified], { type: "text/vtt" }),
+					);
+					createTrack(blobUrl);
+				}).catch((vttErr) => {
+					console.log("VTT fallback also failed:", vttErr.message);
+					alert("Caption loading failed.\nJSON3: " + err.message + "\nVTT: " + vttErr.message);
+				});
+			});
 	}
 });
 
