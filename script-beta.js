@@ -164,7 +164,7 @@ STYLE
 	}
 
 	// ---------- build cues with karaoke timing ----------
-	vtt = style;
+	let vtt = style;
 
 	for (const ev of events) {
 		if (!ev.segs?.length) continue;

@@ -136,7 +136,7 @@ STYLE
 	style += "\n";
 
 	// ---------- build cues ----------
-	vtt = style;
+	let vtt = style;
 
 	for (const ev of events) {
 		if (!ev.segs?.length) continue;
