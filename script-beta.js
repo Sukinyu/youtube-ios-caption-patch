@@ -9,7 +9,7 @@
 
 const injectedUrls = new Set();
 const video = document.querySelector("video");
-const defaultFontFamily =
+const defaultFont =
 	'"YouTube Noto", Roboto, Arial, Helvetica, Verdana, "PT Sans Caption", sans-serif';
 
 function calculateBaseFontSize(videoWidth, videoHeight) {
@@ -48,7 +48,7 @@ function penFontFamily(pen) {
 		case 3:
 			return '"Deja Vu Sans Mono", "Lucida Console", Monaco, Consolas, "PT Mono", monospace';
 		case 4:
-			return '"YouTube Noto", Roboto, Arial, Helvetica, Verdana, "PT Sans Caption", sans-serif';
+			return defaultFont;
 		case 5:
 			return '"Comic Sans MS", Impact, Handlee, fantasy';
 		case 6:
@@ -151,8 +151,8 @@ function json3ToVtt(json) {
 	let style = `WEBVTT
 
 STYLE
-::cue(v) { font-family: "YouTube Noto", Roboto, Arial, Helvetica, Verdana, "PT Sans Caption", sans-serif; }
-::cue(c) { font-family: "YouTube Noto", Roboto, Arial, Helvetica, Verdana, "PT Sans Caption", sans-serif; }
+::cue(v) { font-family: ${defaultFont}; }
+::cue(c) { font-family: ${defaultFont}; }
 `;
 
 	// Add pen styles
@@ -334,28 +334,7 @@ const po = new PerformanceObserver((list) => {
 				);
 				createTrack(blobUrl);
 			})
-			.catch((err) => {
-				console.log("JSON3 failed:", err.message);
-				// Try VTT fallback
-				tryFetch("vtt").then((vttText) => {
-					console.log("VTT response received, length:", vttText.length);
-					if (!vttText || vttText.length < 10) {
-						throw new Error("Empty or invalid VTT response");
-					}
-					// Modify VTT content
-					const modified = vttText
-						.replace(/Style:/g, "STYLE")
-						.replace(/##/g, "");
-
-					const blobUrl = URL.createObjectURL(
-						new Blob([modified], { type: "text/vtt" }),
-					);
-					createTrack(blobUrl);
-				}).catch((vttErr) => {
-					console.log("VTT fallback also failed:", vttErr.message);
-					alert("Caption loading failed.\nJSON3: " + err.message + "\nVTT: " + vttErr.message);
-				});
-			});
+		.catch((err) => {alert(err.message)});
 	}
 });
 

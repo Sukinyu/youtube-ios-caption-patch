@@ -122,7 +122,8 @@ function json3ToVtt(json) {
 	let style = `WEBVTT
 
 STYLE
-::cue(v), ::cue(c) { font-family: "YouTube Noto", Roboto, Arial, Helvetica, Verdana, "PT Sans Caption", sans-serif; }
+::cue(v) { font-family: "YouTube Noto", Roboto, Arial, Helvetica, Verdana, "PT Sans Caption", sans-serif; }
+::cue(c) { font-family: "YouTube Noto", Roboto, Arial, Helvetica, Verdana, "PT Sans Caption", sans-serif; }
 `;
 
 	for (let i = 0; i < pens.length; i++) {
