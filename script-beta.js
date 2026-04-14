@@ -178,8 +178,8 @@ STYLE
 		if (posId > 0 && wpWinPositions[posId]) {
 			const pos = wpWinPositions[posId];
 			let horPos = pos.ahHorPos;
-			let verPos = pos.avVerPos != null ? pos.avVerPos - 2.1 : 2.1;
-			let anchorPoint = pos.apPoint ?? 7;
+			let verPos = pos.avVerPos != null ? pos.avVerPos + 2.1 : 2.1;
+			let anchorPoint = pos.apPoint;
 
 			// SRV3 AnchorPoint values:
 			// 0 = top-left, 1 = top-center, 2 = top-right,
@@ -192,6 +192,7 @@ STYLE
 			const rightAnchors = new Set([2, 5, 8]);
 
 			let align = " align:";
+			if ()
 			if (leftAnchors.has(anchorPoint)) {
 				align += "start";
 			} else if (rightAnchors.has(anchorPoint)) {
