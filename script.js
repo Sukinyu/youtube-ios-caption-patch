@@ -11,7 +11,6 @@ const injectedUrls = new Set();
 const video = document.querySelector("video");
 
 function calculateBaseFontSize(videoWidth, videoHeight) {
-	const aspectRatio = videoWidth / videoHeight;
 	let baseSize = (videoHeight / 360) * 16;
 
 	if (videoHeight >= videoWidth) {
@@ -93,7 +92,7 @@ function penToCss(pen) {
 			case 4: // Blur effect
 				const shadows = [];
 				for (let blur = w; blur <= Math.max(5 * scale, 1); blur += scale) {
-					shadows.push(`${v}px ${v}px ${blur}px ${darkShadow}`);
+					shadows.push(`${v}px ${v}px ${rd(blur, 4)}px ${darkShadow}`);
 				}
 				textShadow += shadows.join(", ");
 		}
