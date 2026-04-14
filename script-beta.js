@@ -10,6 +10,262 @@
 const injectedUrls = new Set();
 const video = document.querySelector("video");
 
+<<<<<<< HEAD
+function calculateBaseFontSize(videoWidth, videoHeight) {
+	const aspectRatio = videoWidth / videoHeight;
+	let baseSize = (videoHeight / 360) * 16;
+
+	if (videoHeight >= videoWidth) {
+		// Landscape check
+		const threshold = videoHeight > videoWidth * 1.3 ? 480 : 640;
+		baseSize = (videoWidth / threshold) * 16;
+	}
+	return baseSize;
+}
+
+function ts(ms) {
+	const s = ms / 1000;
+	const h = String(Math.floor(s / 3600)).padStart(2, "0");
+	const m = String(Math.floor((s % 3600) / 60)).padStart(2, "0");
+	const sec = (s % 60).toFixed(3).padStart(6, "0");
+	return `${h}:${m}:${sec}`;
+}
+function rgb(num) {
+	return `${(num >> 16) & 255},${(num >> 8) & 255},${num & 255}`;
+}
+function rd(num, decimals = 3) {
+	return Number(num.toFixed(decimals));
+}
+
+function penToCss(pen) {
+	if (!pen) return "color: rgba(255,255,255,1);";
+
+	// Get video dimensions for font size calculation
+	const videoRect = video.getBoundingClientRect();
+	const videoWidth = videoRect.width;
+	const videoHeight = videoRect.height;
+
+	// Calculate base font size (YouTube's N3e function)
+	// N3e takes (width, height, height, width) and returns base size
+	let baseFontSize = calculateBaseFontSize(videoWidth, videoHeight);
+
+	// Font size multiplier (YouTube's SzJ function)
+	// szPenSize is converted to fontSizeIncrement: (szPenSize / 100) - 1
+	const fontSizeIncrement = pen.szPenSize ? pen.szPenSize / 100 - 1 : 0;
+	let fontSizeMultiplier = 1 + 0.25 * fontSizeIncrement;
+	const finalFontSize = rd(baseFontSize * fontSizeMultiplier, 4);
+
+	// Colors
+	const c = rgb(pen.fcForeColor ?? 0xffffff);
+	const foreAlpha = rd(pen.foForeAlpha != null ? pen.foForeAlpha / 255 : 1, 4);
+	const cB = rgb(pen.bcBackColor ?? 0);
+	const backAlpha = rd(
+		pen.boBackAlpha != null ? pen.boBackAlpha / 255 : 0.5,
+		4,
+	);
+
+	// Edge effects
+	const edgeType = pen.etEdgeType ?? 0;
+	let textShadow = "";
+	if (edgeType) {
+		textShadow = "text-shadow: ";
+		const scale = baseFontSize / 16 / 2; // Base scale factor
+		const K = rd(Math.max(scale, 1), 4);
+		const v = rd(Math.max(2 * scale, 1), 4);
+		const w = rd(Math.max(3 * scale, 1), 4);
+
+		let eC = pen.ecEdgeColor ? `rgb(${rgb(pen.ecEdgeColor)})` : null;
+		let darkShadow = eC ?? `rgba(34, 34, 34, ${foreAlpha})`;
+		let lightShadow = eC ?? `rgba(204, 204, 204, ${foreAlpha})`;
+		switch (edgeType) {
+			case 1: // Uniform raised
+				const step = window.devicePixelRatio >= 2 ? 0.5 : 1;
+				textShadow += Array.from(
+					{ length: Math.ceil((w - K) / step) + 1 },
+					(_, i) => `${K + i * step}px ${K + i * step}px ${darkShadow}`,
+				).join(", ");
+				break;
+			case 2: // 3D raised
+				textShadow += `${K}px ${K}px ${lightShadow}, -${K}px -${K}px ${darkShadow}`;
+				break;
+			case 3: // Glow (most common)
+				textShadow += Array(5).fill(`0 0 ${v}px ${darkShadow}`).join(", ");
+				break;
+			case 4: // Blur effect
+				const shadows = [];
+				for (let blur = w; blur <= Math.max(5 * scale, 1); blur += scale) {
+					shadows.push(`${v}px ${v}px ${blur}px ${darkShadow}`);
+				}
+				textShadow += shadows.join(", ");
+		}
+		textShadow += ";";
+	}
+
+	// Text decorations
+	const bold = pen.bAttr == 1 ? "font-weight: bold;" : "";
+	const italic = pen.iAttr == 1 ? "font-style: italic;" : "";
+	const underline = pen.uAttr == 1 ? "text-decoration: underline;" : "";
+
+	return `
+				${bold} ${italic} ${underline}
+				color: rgba(${c},${foreAlpha});
+				background: rgba(${cB},${backAlpha});
+				font-family: "YouTube Noto", Roboto, Arial, Helvetica, Verdana, "PT Sans Caption", sans-serif;
+				${textShadow}
+				font-size: ${finalFontSize}px;
+			`
+		.replace(/\s+/g, " ")
+		.trim();
+}
+function json3ToVtt(json) {
+	const events = json.events || [];
+	const pens = json.pens || [];
+	const wpWinPositions = json.wpWinPositions || [];
+
+	// ---------- build CSS from pens + positions ----------
+	let style = `WEBVTT
+
+STYLE
+`;
+
+	// Add pen styles
+	for (let i = 0; i < pens.length; i++) {
+		const pen = pens[i];
+		if (!pen || Object.keys(pen).length === 0) continue;
+
+		style += `::cue(.pen${i}) { ${penToCss(pen)} }\n`;
+	}
+
+	// Add position styles (though WebVTT positioning uses attributes, keeping for compatibility)
+	for (let i = 0; i < wpWinPositions.length; i++) {
+		const pos = wpWinPositions[i];
+		if (!pos || Object.keys(pos).length === 0) continue;
+
+		// For WebVTT, positioning is handled via attributes on cue timestamps
+		// But we'll keep CSS for any additional styling if needed
+		let positionCss = `position: absolute; `;
+		
+		// Horizontal positioning
+		const horPos = pos.ahHorPos != null ? pos.ahHorPos : 50;
+		positionCss += `left: ${horPos}%; `;
+		positionCss += `transform: translateX(-50%); `;
+		
+		// Vertical positioning
+		const verPos = pos.avVerPos != null ? pos.avVerPos : 85;
+		positionCss += `top: ${verPos}%; `;
+		
+		// Anchor point determines alignment
+		const anchorPoint = pos.apPoint ?? 7;
+		switch (anchorPoint) {
+			case 1: // Top-left
+				positionCss = positionCss.replace(`transform: translateX(-50%);`, ``);
+				positionCss += `text-align: left; `;
+				break;
+			case 3: // Top-right
+				positionCss = positionCss.replace(`transform: translateX(-50%);`, `transform: translateX(-100%);`);
+				positionCss += `text-align: right; `;
+				break;
+			case 7: // Center (default)
+				positionCss += `text-align: center; `;
+				break;
+			case 9: // Bottom-right
+				positionCss = positionCss.replace(`transform: translateX(-50%);`, `transform: translateX(-100%);`);
+				positionCss += `text-align: right; `;
+				break;
+		}
+
+		style += `::cue(.pos${i}) { ${positionCss}}\n`;
+	}
+
+	style += "\n";
+
+	// ---------- build cues with karaoke timing ----------
+	vtt = style;
+
+	for (const ev of events) {
+		if (!ev.segs?.length) continue;
+
+		// Get position data for this event
+		const posId = ev.wpWinPosId ?? 0;
+		let positionAttrs = "";
+		
+		if (posId > 0 && wpWinPositions[posId]) {
+			const pos = wpWinPositions[posId];
+			const horPos = pos.ahHorPos != null ? pos.ahHorPos : 50;
+			const verPos = pos.avVerPos != null ? pos.avVerPos : 85;
+			const anchorPoint = pos.apPoint ?? 7;
+			
+			// WebVTT position attributes
+			positionAttrs = ` position:${horPos}% line:${verPos}%`;
+			
+			// Add alignment based on anchor point
+			switch (anchorPoint) {
+				case 1: // Top-left
+					positionAttrs += ` align:start`;
+					break;
+				case 3: // Top-right
+					positionAttrs += ` align:end`;
+					break;
+				case 7: // Center (default)
+					positionAttrs += ` align:middle`;
+					break;
+				case 9: // Bottom-right
+					positionAttrs += ` align:end`;
+					break;
+			}
+		}
+
+		// Check if this event has karaoke timing (progressive text reveal)
+		const hasKaraokeTiming = ev.segs.some(seg => seg.tStartMs != null);
+		
+		if (hasKaraokeTiming) {
+			// Build karaoke cues with individual segment timing
+			for (const seg of ev.segs) {
+				if (!seg.utf8) continue;
+
+				const segStart = ts(seg.tStartMs ?? ev.tStartMs);
+				const segEnd = ts((seg.tStartMs ?? ev.tStartMs) + (seg.dDurationMs ?? ev.dDurationMs ?? 0));
+				
+				const penId = seg.pPenId;
+				let text = seg.utf8;
+
+				if (penId != null) {
+					text = `<c.pen${penId}>${text}</c>`;
+				}
+
+				vtt += `${segStart} --> ${segEnd}${positionAttrs}\n`;
+				vtt += `${text}\n\n`;
+			}
+		} else {
+			// Standard non-karaoke cue with all segments
+			const start = ts(ev.tStartMs);
+			const end = ts(ev.tStartMs + (ev.dDurationMs || 0));
+
+			let parts = [];
+			for (const seg of ev.segs) {
+				const text = seg.utf8;
+				const penId = seg.pPenId;
+
+				if (!text) continue;
+				if (!penId) {
+					parts.push(text);
+					continue;
+				}
+				parts.push(`<c.pen${penId}>${text}</c>`);
+			}
+
+			if (!parts.length) continue;
+
+			const line = parts.join("");
+
+			vtt += `${start} --> ${end}${positionAttrs}\n`;
+			vtt += `${line}\n\n`;
+		}
+	}
+	return vtt;
+}
+
+=======
 function calculateBaseFontSize(videoWidth, videoHeight) {
 	const aspectRatio = videoWidth / videoHeight;
 	let baseSize = (videoHeight / 360) * 16;
@@ -171,6 +427,7 @@ STYLE
 	return vtt;
 }
 
+>>>>>>> 7270d39334d5ecb50bb420e1d788fb6bec9531e7
 const po = new PerformanceObserver((list) => {
 	for (const entry of list.getEntries()) {
 		const url = entry.name;
