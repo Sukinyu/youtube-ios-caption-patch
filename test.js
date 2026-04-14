@@ -1,9 +1,5 @@
 function log(data) {
-	fetch("http://192.168.12.114:3000/", {
-		method: "POST",
-		body: JSON.stringify(data),
-		mode: "no-cors",
-	}).catch((e) => {alert(e.message)});
+	alert(data);
 }
 
 const injectedUrls = new Set();
