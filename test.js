@@ -1,23 +1,73 @@
-// ==UserScript==
-// @name         Fix MWeb Youtube Fullscreen Captions
-// @author       Sukinyu
-// @version      0.3.18
-// @last         4/13/2026 (mm/dd/yyyy)
-// @description  Fix captions on youtube videos in fullscreen mode on iOS (https://m.youtube.com/watch?). Injects a captions track with user-preferred language.
-// @match        https://m.youtube.com/watch?*
-// ==/UserScript==
-
 function log( ...args) {
 	try {
-    const msg = args.map(a => typeof a === 'object' ? JSON.stringify(a) : String(a)).join(" ");
-  fetch("https://webhook.site/1142ed6a-18e6-4cb3-9811-f309531075c4", {
-    method: "POST",
-    body: JSON.stringify({ log: msg, timestamp: new Date().toISOString() })
-  }).catch(() => {});
+		const msg = args.map(a => typeof a === 'object' ? JSON.stringify(a) : String(a)).join(" ");
+		const timestamp = new Date().toISOString();
+		
+		// Store in sessionStorage for later retrieval
+		let logs = JSON.parse(sessionStorage .getItem('captionLogs') || '[]');
+		logs.push({ msg, timestamp });
+		// Keep only last 50 logs to avoid storage limits
+		if (logs.length > 50) logs = logs.slice(-50);
+		sessionStorage.setItem('captionLogs', JSON.stringify(logs));
+		
+		// Console log for debugging
+		console.log(msg);
 	} catch (e) {
-		// Silently fail
+		// Fallback to alert if everything fails
+		alert("Log error: " + e.message);
 	}
 }
+
+// Add a function to view stored logs
+window.showLogs = function() {
+	try {
+		const logs = JSON.parse(sessionStorage.getItem('captionLogs') || '[]');
+		const logText = logs.map(l => `${new Date(l.timestamp).toLocaleTimeString()}: ${l.msg}`).join('\n\n');
+		
+		// Create a temporary element to display logs
+		const logDiv = document.createElement('div');
+		logDiv.style.cssText = `
+			position: fixed;
+			top: 10px;
+			right: 10px;
+			width: 400px;
+			height: 300px;
+			background: rgba(0,0,0,0.9);
+			color: white;
+			font-family: monospace;
+			font-size: 12px;
+			padding: 10px;
+			border-radius: 5px;
+			z-index: 999999;
+			overflow: auto;
+			white-space: pre-wrap;
+		`;
+		logDiv.textContent = logText || 'No logs stored';
+		
+		// Add close button
+		const closeBtn = document.createElement('button');
+		closeBtn.textContent = 'Close';
+		closeBtn.style.cssText = 'position: absolute; top: 5px; right: 5px; background: red; color: white; border: none; padding: 2px 5px; cursor: pointer;';
+		closeBtn.onclick = () => document.body.removeChild(logDiv);
+		logDiv.appendChild(closeBtn);
+		
+		document.body.appendChild(logDiv);
+		
+		// Auto-remove after 30 seconds
+		setTimeout(() => {
+			if (logDiv.parentNode) document.body.removeChild(logDiv);
+		}, 30000);
+	} catch (e) {
+		alert('Error reading logs: ' + e.message);
+	}
+};
+
+// Add keyboard shortcut to show logs (press L key)
+document.addEventListener('keydown', function(e) {
+	if (e.key === 'l' || e.key === 'L') {
+		showLogs();
+	}
+});
 
 const injectedUrls = new Set();
 const video = document.querySelector("video");
