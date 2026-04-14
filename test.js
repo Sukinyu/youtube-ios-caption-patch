@@ -1,73 +1,10 @@
-function log( ...args) {
-	try {
-		const msg = args.map(a => typeof a === 'object' ? JSON.stringify(a) : String(a)).join(" ");
-		const timestamp = new Date().toISOString();
-		
-		// Store in sessionStorage for later retrieval
-		let logs = JSON.parse(sessionStorage .getItem('captionLogs') || '[]');
-		logs.push({ msg, timestamp });
-		// Keep only last 50 logs to avoid storage limits
-		if (logs.length > 50) logs = logs.slice(-50);
-		sessionStorage.setItem('captionLogs', JSON.stringify(logs));
-		
-		// Console log for debugging
-		console.log(msg);
-	} catch (e) {
-		// Fallback to alert if everything fails
-		alert("Log error: " + e.message);
-	}
+function log(data) {
+	fetch("http://192.168.12.114:3000/", {
+		method: "POST",
+		body: JSON.stringify(data),
+		mode: "no-cors",
+	}).catch(() => {});
 }
-
-// Add a function to view stored logs
-window.showLogs = function() {
-	try {
-		const logs = JSON.parse(sessionStorage.getItem('captionLogs') || '[]');
-		const logText = logs.map(l => `${new Date(l.timestamp).toLocaleTimeString()}: ${l.msg}`).join('\n\n');
-		
-		// Create a temporary element to display logs
-		const logDiv = document.createElement('div');
-		logDiv.style.cssText = `
-			position: fixed;
-			top: 10px;
-			right: 10px;
-			width: 400px;
-			height: 300px;
-			background: rgba(0,0,0,0.9);
-			color: white;
-			font-family: monospace;
-			font-size: 12px;
-			padding: 10px;
-			border-radius: 5px;
-			z-index: 999999;
-			overflow: auto;
-			white-space: pre-wrap;
-		`;
-		logDiv.textContent = logText || 'No logs stored';
-		
-		// Add close button
-		const closeBtn = document.createElement('button');
-		closeBtn.textContent = 'Close';
-		closeBtn.style.cssText = 'position: absolute; top: 5px; right: 5px; background: red; color: white; border: none; padding: 2px 5px; cursor: pointer;';
-		closeBtn.onclick = () => document.body.removeChild(logDiv);
-		logDiv.appendChild(closeBtn);
-		
-		document.body.appendChild(logDiv);
-		
-		// Auto-remove after 30 seconds
-		setTimeout(() => {
-			if (logDiv.parentNode) document.body.removeChild(logDiv);
-		}, 30000);
-	} catch (e) {
-		alert('Error reading logs: ' + e.message);
-	}
-};
-
-// Add keyboard shortcut to show logs (press L key)
-document.addEventListener('keydown', function(e) {
-	if (e.key === 'l' || e.key === 'L') {
-		showLogs();
-	}
-});
 
 const injectedUrls = new Set();
 const video = document.querySelector("video");
@@ -182,9 +119,14 @@ function json3ToVtt(json) {
 
 	// Log video dimensions and pen count for debugging
 	const videoRect = video?.getBoundingClientRect();
-	log("Video dimensions:", { width: videoRect?.width, height: videoRect?.height });
-	log("Total pens:", pens.length);
-	log("Pen data (first 3):", pens.slice(0, 3));
+	log({
+		"Video dimensions": {
+			width: videoRect?.width,
+			height: videoRect?.height,
+		},
+	});
+	log({ "Total pens": pens.length });
+	log({ "Pen data (first 3)": pens.slice(0, 3) });
 
 	// ---------- build CSS from pens ----------
 	let style = `WEBVTT
@@ -201,7 +143,7 @@ STYLE
 		style += `::cue(.pen${i}) { ${css} }\n`;
 	}
 
-	log("STYLE block generated", { lines: style.split("\n").length });
+	log({ msg: "STYLE block generated", lines: style.split("\n").length });
 	style += "\n";
 
 	// ---------- build cues ----------
@@ -237,7 +179,7 @@ STYLE
 		vtt += `${start} --> ${end}\n`;
 		vtt += `${line}\n\n`;
 	}
-	log("VTT output (first 500 chars):", vtt.substring(0, 500));
+	log({"VTT output (first 500 chars)": vtt.substring(0, 500)});
 	return vtt;
 }
 
@@ -247,7 +189,7 @@ const po = new PerformanceObserver((list) => {
 		if (!url.includes("/api/timedtext") || injectedUrls.has(url)) continue;
 		injectedUrls.add(url);
 
-		log("Caption request detected:", url);
+		log({"Caption request detected": url});
 		let newURL = new URL(url);
 		const removeParams = [
 			"potc",
@@ -279,10 +221,10 @@ const po = new PerformanceObserver((list) => {
 			if (track) {
 				if (track.src.startsWith("blob:")) {
 					URL.revokeObjectURL(track.src);
-					log("Revoked old blob URL");
+					log({msg: "Revoked old blob URL"});
 				}
 				track.src = vttUrl;
-				log("Updated captions track");
+				log({msg:"Updated captions track"});
 			} else {
 				track = document.createElement("track");
 				track.kind = "captions";
@@ -292,18 +234,18 @@ const po = new PerformanceObserver((list) => {
 				track.default = true;
 				track.setAttribute("data-injected", "");
 				video.appendChild(track);
-				log("Injected captions track");
+				log({msg:"Injected captions track"});
 			}
 			try {
 				setTimeout(() => {
-					log("Track cues loaded:", track.cues?.length || 0);
+					log({"Track cues loaded": track.cues?.length || 0});
 					if (track.cues?.length > 0) {
-						log("First cue text:", track.cues[0].text?.substring(0, 100));
+						log({"First cue text": track.cues[0].text?.substring(0, 100)});
 					}
 				}, 1000);
-				log("track", track);
+				log({"track": track});
 			} catch (e) {
-				log("Error checking cues:", e.message);
+				log({"Error checking cues": e.message});
 			}
 			if (translated) {
 				track.label += " (TS)";
