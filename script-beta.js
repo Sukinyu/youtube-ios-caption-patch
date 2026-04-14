@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Fix MWeb Youtube Fullscreen Captions
 // @author       Sukinyu
-// @version      0.3.19
+// @version      0.3.20
 // @last         4/14/2026 (mm/dd/yyyy)
 // @description  Fix captions on youtube videos in fullscreen mode on iOS (https://m.youtube.com/watch?). Injects a captions track with user-preferred language.
 // @match        https://m.youtube.com/watch?*
@@ -47,16 +47,14 @@ function penFontFamily(pen) {
 			return '"Times New Roman", Times, Georgia, Cambria, "PT Serif Caption", serif';
 		case 3:
 			return '"Deja Vu Sans Mono", "Lucida Console", Monaco, Consolas, "PT Mono", monospace';
+		case 4:
+			return '"YouTube Noto", Roboto, Arial, Helvetica, Verdana, "PT Sans Caption", sans-serif';
 		case 5:
 			return '"Comic Sans MS", Impact, Handlee, fantasy';
 		case 6:
 			return '"Monotype Corsiva", "URW Chancery L", "Apple Chancery", "Dancing Script", cursive';
 		case 7:
 			return 'Arial, Helvetica, Verdana, "Marcellus SC", sans-serif';
-		case 0:
-		case 4:
-		default:
-			return defaultFontFamily;
 	}
 }
 
@@ -117,7 +115,7 @@ function penToCss(pen) {
 			case 4: // Blur effect
 				const shadows = [];
 				for (let blur = w; blur <= Math.max(5 * scale, 1); blur += scale) {
-					shadows.push(`${v}px ${v}px ${blur}px ${darkShadow}`);
+					shadows.push(`${v}px ${v}px ${rd(blur, 4)}px ${darkShadow}`);
 				}
 				textShadow += shadows.join(", ");
 		}
@@ -131,8 +129,7 @@ function penToCss(pen) {
 	const fontFamily = penFontFamily(pen);
 	const fontVariant =
 		Number(pen.fsFontStyle ?? 0) === 7 ? "font-variant: small-caps;" : "";
-	const fontFamilyCss =
-		fontFamily === defaultFontFamily ? "" : `font-family: ${fontFamily};`;
+	const fontFamilyCss = !fontFamily ? "" : `font-family: ${fontFamily};`;
 
 	return `
 				${bold} ${italic} ${underline} ${fontVariant}
@@ -154,7 +151,7 @@ function json3ToVtt(json) {
 	let style = `WEBVTT
 
 STYLE
-::cue { font-family: ${defaultFontFamily}; }
+::cue(v), ::cue(c) { font-family: "YouTube Noto", Roboto, Arial, Helvetica, Verdana, "PT Sans Caption", sans-serif; }
 `;
 
 	// Add pen styles
@@ -178,7 +175,7 @@ STYLE
 		if (posId > 0 && wpWinPositions[posId]) {
 			const pos = wpWinPositions[posId];
 			let horPos = pos.ahHorPos;
-			let verPos = pos.avVerPos != null ? pos.avVerPos + 2.1 : 2.1;
+			let verPos = Math.max(0, pos.avVerPos != null ? pos.avVerPos - 2.1 : 2.1);
 			let anchorPoint = pos.apPoint;
 
 			// SRV3 AnchorPoint values:
@@ -191,18 +188,27 @@ STYLE
 			const leftAnchors = new Set([0, 3, 6]);
 			const rightAnchors = new Set([2, 5, 8]);
 
-			let align = " align:";
-			if ()
-			if (leftAnchors.has(anchorPoint)) {
-				align += "start";
-			} else if (rightAnchors.has(anchorPoint)) {
-				align += "end";
-			} else horPos != 50 && (align += "center");
+			let align = "";
+			if (horPos !== 50 && anchorPoint) {
+				align = " align:";
+				if (anchorPoint) {
+					if (leftAnchors.has(anchorPoint)) {
+						align += "start";
+					} else if (rightAnchors.has(anchorPoint)) {
+						align += "end";
+					} else align += "center";
+				} else {
+					horPos && (align += "center");
+				}
+			}
 
-			let lineValue = 100 - verPos;
+			let position =
+				horPos != 50 && !align.length == 0 ? ` position:${rd(horPos, 2)}%` : "";
+
+			let lineValue = verPos;
 
 			// WebVTT expects line (vertical) then position (horizontal) then align.
-			positionAttrs = ` line:${rd(lineValue, 2)}% position:${rd(horPosScaled, 2)}%${align}`;
+			positionAttrs = ` line:${rd(lineValue, 2)}%${position}${align}`;
 		}
 
 		// Build cues - combine karaoke and non-karaoke into one payload-based cue
@@ -236,7 +242,7 @@ STYLE
 			cueText = `<v.pen${ev.pPenId}>${cueText}</v>`;
 		}
 
-		vtt += `${start} --> ${end}${positionAttrs}\n${cueText}\n\n`;
+		vtt += `\n${start} --> ${end}${positionAttrs}\n${cueText}\n`;
 	}
 	console.log("Generated VTT:\n", vtt);
 	return vtt;
