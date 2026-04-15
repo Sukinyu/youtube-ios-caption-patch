@@ -39,6 +39,18 @@ function rd(num, decimals = 3) {
 	return Number(num.toFixed(decimals));
 }
 
+function containerPctToVideoPct(containerRect, videoRect, pct, axis) {
+	const size = axis === "x" ? containerRect.width : containerRect.height;
+	const offset = axis === "x" ? containerRect.left : containerRect.top;
+	const pageCoord = offset + (pct / 100) * size;
+	const videoStart = axis === "x" ? videoRect.left : videoRect.top;
+	const videoSize = axis === "x" ? videoRect.width : videoRect.height;
+	return rd(
+		Math.max(0, Math.min(100, ((pageCoord - videoStart) / videoSize) * 100)),
+		2,
+	);
+}
+
 function penFontFamily(pen) {
 	const fontFamily = pen.fsFontStyle;
 	switch (fontFamily) {
@@ -145,11 +157,7 @@ function json3ToVtt(json) {
 	const videoWidth = videoRect.width;
 	const videoHeight = videoRect.height;
 	const basefs = calculateBaseFontSize(videoWidth, videoHeight);
-	const scale = basefs / 16 / 2;
-	video.style.setProperty("--caption-fs", `${basefs}px`);
-	video.style.setProperty("--K", `"calc($max(var(${scale}), 1px))"`);
-	video.style.setProperty("--v", `"calc($max(var(${scale}) * 2, 1px))"`);
-	video.style.setProperty("--w", `"calc($max(var(${scale}) * 3, 1px))"`);
+	updateCaptionStyles();
 
 	// ---------- build CSS from pens + positions ----------
 	let style = `WEBVTT
@@ -179,8 +187,19 @@ STYLE
 
 		if (posId > 0 && wpWinPositions[posId]) {
 			const pos = wpWinPositions[posId];
-			let horPos = rd(15.5 + (pos.ahHorPos / 100) * 69, 2);
-			let verPos = Math.max(0, pos.avVerPos != null ? pos.avVerPos - 2.1 : 2.1);
+			/*let horPos = rd(15.5 + (pos.ahHorPos / 100) * 69, 2);
+			let verPos = Math.max(0, pos.avVerPos != null ? pos.avVerPos - 2.1 : 2.1);*/
+			let horPos = pos.ahHorPos != null ? pos.ahHorPos : 50;
+			let verPos = pos.avVerPos != null ? pos.avVerPos : 0;
+			const containerRect = document.querySelector("#ytp-caption-window-container").getBoundingClientRect();
+
+			if (containerRect && videoRect.width > 0 && videoRect.height > 0) {
+				horPos = containerPctToVideoPct(containerRect, videoRect, horPos, "x");
+				verPos = containerPctToVideoPct(containerRect, videoRect, verPos-2, "y");
+			} else {
+				horPos = rd(15.5 + (horPos / 100) * 69, 2);
+				verPos = Math.max(0, verPos - 2.1);
+			} // Addition ends
 			let anchorPoint = pos.apPoint;
 
 			// SRV3 AnchorPoint values:
@@ -345,3 +364,17 @@ const po = new PerformanceObserver((list) => {
 });
 
 po.observe({ type: "resource", buffered: true });
+
+function updateCaptionStyles() {
+	const videoRect = video.getBoundingClientRect();
+	const videoWidth = videoRect.width;
+	const videoHeight = videoRect.height;
+	const fs = calculateBaseFontSize(videoWidth, videoHeight);
+	video.style.setProperty("--caption-fs", `${fs}px`);
+	const scale = fs / 16 / 2;
+	video.style.setProperty("--K", `"calc($max(var(${scale}), 1px))"`);
+	video.style.setProperty("--v", `"calc($max(var(${scale}) * 2, 1px))"`);
+	video.style.setProperty("--w", `"calc($max(var(${scale}) * 3, 1px))"`);
+}
+
+window.addEventListener("resize", updateCaptionStyles);
