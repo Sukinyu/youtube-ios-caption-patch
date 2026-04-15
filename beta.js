@@ -187,9 +187,12 @@ STYLE
 
 		if (posId > 0 && wpWinPositions[posId]) {
 			const pos = wpWinPositions[posId];
-			/*let horPos = rd(15.5 + (pos.ahHorPos / 100) * 69, 2);
-			let verPos = Math.max(0, pos.avVerPos != null ? pos.avVerPos - 2.1 : 2.1);*/
-			let horPos = pos.ahHorPos != null ? pos.ahHorPos : 50;
+
+			let horPos = rd(15.5 + (pos.ahHorPos / 100) * 69, 2);
+			let verPos = Math.max(0, pos.avVerPos != null ? pos.avVerPos - 2.1 : 2.1);
+
+			
+			/*let horPos = pos.ahHorPos != null ? pos.ahHorPos : 50;
 			let verPos = pos.avVerPos != null ? pos.avVerPos : 0;
 			const containerRect = document.querySelector("#ytp-caption-window-container").getBoundingClientRect();
 
@@ -199,7 +202,7 @@ STYLE
 			} else {
 				horPos = rd(15.5 + (horPos / 100) * 69, 2);
 				verPos = Math.max(0, verPos - 2.1);
-			} // Addition ends
+			} // Addition ends*/
 			let anchorPoint = pos.apPoint;
 
 			// SRV3 AnchorPoint values:
@@ -260,6 +263,7 @@ STYLE
 		});
 
 		if (!parts.length) return;
+		if (parts.length === 1 && parts[0] == '\n') return; // Skip empty cues from auto-gen
 		
 		parts.unshift(`<v${ev.pPenId ? `.pen${ev.pPenId}` : ""}>`);
 		parts.push("</v>");
@@ -382,9 +386,9 @@ function updateCaptionStyles() {
 	const fs = calculateBaseFontSize(videoWidth, videoHeight);
 	video.style.setProperty("--caption-fs", `${fs}px`);
 	const scale = fs / 16 / 2;
-	video.style.setProperty("--K", `"calc($max(var(${scale}), 1px))"`);
-	video.style.setProperty("--v", `"calc($max(var(${scale}) * 2, 1px))"`);
-	video.style.setProperty("--w", `"calc($max(var(${scale}) * 3, 1px))"`);
+	video.style.setProperty("--K", `${scale > 1 ? scale : 1}px`);
+	video.style.setProperty("--v", `${scale * 2 > 1 ? scale * 2 : 1}px`);
+	video.style.setProperty("--w", `${scale * 3 ? scale * 3 : 1}px`);
 }
 
 window.addEventListener("resize", updateCaptionStyles);
