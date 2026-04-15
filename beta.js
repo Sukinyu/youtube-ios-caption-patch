@@ -22,7 +22,7 @@ function calculateBaseFontSize(videoWidth, videoHeight) {
 	}
 
 	// Return a percentage relative to a standard 16px baseline.
-	return (baseSize / 16) * 67.6;
+	return baseSize;
 }
 
 function ts(ms) {
@@ -68,13 +68,16 @@ function penToCss(pen) {
 	const videoHeight = videoRect.height;
 
 	// Calculate base font percent (YouTube's N3e function returns a size relative to 16px)
-	let baseFontPercent = calculateBaseFontSize(videoWidth, videoHeight);
+	let basefs = calculateBaseFontSize(videoWidth, videoHeight);
 
 	// Font size multiplier (YouTube's SzJ function)
 	// szPenSize is converted to fontSizeIncrement: (szPenSize / 100) - 1
 	const fontSizeIncrement = pen.szPenSize ? pen.szPenSize / 100 - 1 : 0;
 	let fontSizeMultiplier = 1 + 0.25 * fontSizeIncrement;
-	const fontSizeCss = fontSizeMultiplier !== 1 ? `font-size: calc(var(--caption-fs) * ${fontSizeMultiplier});` : "";
+	const fontSizeCss =
+		fontSizeMultiplier !== 1 ?
+			`font-size: calc(var(--caption-fs) * ${fontSizeMultiplier});`
+		:	"";
 
 	// Colors
 	const c = rgb(pen.fcForeColor ?? 0xffffff);
@@ -141,13 +144,12 @@ function json3ToVtt(json) {
 	const videoRect = video.getBoundingClientRect();
 	const videoWidth = videoRect.width;
 	const videoHeight = videoRect.height;
-	const baseFontPercent = calculateBaseFontSize(videoWidth, videoHeight);
-	const fontScale = baseFontPercent / 100;
-	video.style.setProperty('--caption-fs', `${baseFontPercent}%`);
-	//video.style.setProperty('--caption-scale', `${baseFontPercent / 100}`);
-	video.style.setProperty('--K', `"calc($max(var(${fontScale}), 1px))"`);
-	video.style.setProperty('--v', `"calc($max(var(${fontScale}) * 2, 1px))"`);
-	video.style.setProperty('--w', `"calc($max(var(${fontScale}) * 3, 1px))"`);
+	const basefs = calculateBaseFontSize(videoWidth, videoHeight);
+	const scale = basefs / 16 / 2;
+	video.style.setProperty("--caption-fs", `${basefs}px`);
+	video.style.setProperty("--K", `"calc($max(var(${scale}), 1px))"`);
+	video.style.setProperty("--v", `"calc($max(var(${scale}) * 2, 1px))"`);
+	video.style.setProperty("--w", `"calc($max(var(${scale}) * 3, 1px))"`);
 
 	// ---------- build CSS from pens + positions ----------
 	let style = `WEBVTT
