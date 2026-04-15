@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         Fix MWeb Youtube Fullscreen Captions
 // @author       Sukinyu
-// @version      0.3.31
-// @last         4/14/2026 (mm/dd/yyyy)
+// @version      0.3.33
+// @last         4/15/2026 (mm/dd/yyyy)
 // @description  Fix captions on youtube videos in fullscreen mode on iOS (https://m.youtube.com/watch?). Injects a captions track with user-preferred language.
 // @match        https://m.youtube.com/watch?*
 // ==/UserScript==
@@ -13,7 +13,6 @@ const defaultFont =
 	'"YouTube Noto", Roboto, Arial, Helvetica, Verdana, "PT Sans Caption", sans-serif';
 
 function calculateBaseFontSize(videoWidth, videoHeight) {
-	const aspectRatio = videoWidth / videoHeight;
 	let baseSize = (videoHeight / 360) * 16;
 
 	if (videoHeight >= videoWidth) {
@@ -21,7 +20,9 @@ function calculateBaseFontSize(videoWidth, videoHeight) {
 		const threshold = videoHeight > videoWidth * 1.3 ? 480 : 640;
 		baseSize = (videoWidth / threshold) * 16;
 	}
-	return baseSize;
+
+	// Return a percentage relative to a standard 16px baseline.
+	return (baseSize / 16) * 67.6;
 }
 
 function ts(ms) {
@@ -66,15 +67,14 @@ function penToCss(pen) {
 	const videoWidth = videoRect.width;
 	const videoHeight = videoRect.height;
 
-	// Calculate base font size (YouTube's N3e function)
-	// N3e takes (width, height, height, width) and returns base size
-	let baseFontSize = calculateBaseFontSize(videoWidth, videoHeight);
+	// Calculate base font percent (YouTube's N3e function returns a size relative to 16px)
+	let baseFontPercent = calculateBaseFontSize(videoWidth, videoHeight);
 
 	// Font size multiplier (YouTube's SzJ function)
 	// szPenSize is converted to fontSizeIncrement: (szPenSize / 100) - 1
 	const fontSizeIncrement = pen.szPenSize ? pen.szPenSize / 100 - 1 : 0;
 	let fontSizeMultiplier = 1 + 0.25 * fontSizeIncrement;
-	const finalFontSize = rd(baseFontSize * fontSizeMultiplier, 4);
+	const fontSizeCss = fontSizeMultiplier !== 1 ? `font-size: calc(var(--caption-fs) * ${fontSizeMultiplier});` : "";
 
 	// Colors
 	const c = rgb(pen.fcForeColor ?? 0xffffff);
@@ -90,34 +90,25 @@ function penToCss(pen) {
 	let textShadow = "";
 	if (edgeType) {
 		textShadow = "text-shadow: ";
-		const scale = baseFontSize / 16 / 2; // Base scale factor
-		const K = rd(Math.max(scale, 1), 4);
-		const v = rd(Math.max(2 * scale, 1), 4);
-		const w = rd(Math.max(3 * scale, 1), 4);
+		//const K = "calc(max(var(--caption-scale), 1) * 1px)";
+		//const v = "calc(max(var(--caption-scale), 1) * 2px)";
+		//const w = "calc(max(var(--caption-scale), 1) * 3px)";
 
 		let eC = pen.ecEdgeColor != null ? `rgb(${rgb(pen.ecEdgeColor)})` : null;
 		let darkShadow = eC ?? `rgba(34, 34, 34, ${foreAlpha})`;
 		let lightShadow = eC ?? `rgba(204, 204, 204, ${foreAlpha})`;
 		switch (edgeType) {
 			case 1: // Uniform raised
-				const step = window.devicePixelRatio >= 2 ? 0.5 : 1;
-				textShadow += Array.from(
-					{ length: Math.ceil((w - K) / step) + 1 },
-					(_, i) => `${K + i * step}px ${K + i * step}px ${darkShadow}`,
-				).join(", ");
+				textShadow += `var(--K) var(--K) ${darkShadow}, calc(var(--K) + 1px) calc(var(--K) + 1px) ${darkShadow}, calc(var(--K) + 2px) calc(var(--K) + 2px) ${darkShadow}`;
 				break;
 			case 2: // 3D raised
-				textShadow += `${K}px ${K}px ${lightShadow}, -${K}px -${K}px ${darkShadow}`;
+				textShadow += `var(--K) var(--K) ${lightShadow}, -var(--K) -var(--K) ${darkShadow}`;
 				break;
 			case 3: // Glow (most common)
-				textShadow += Array(5).fill(`0 0 ${v}px ${darkShadow}`).join(", ");
+				textShadow += Array(5).fill(`0 0 var(--v) ${darkShadow}`).join(", ");
 				break;
 			case 4: // Blur effect
-				const shadows = [];
-				for (let blur = w; blur <= Math.max(5 * scale, 1); blur += scale) {
-					shadows.push(`${v}px ${v}px ${rd(blur, 4)}px ${darkShadow}`);
-				}
-				textShadow += shadows.join(", ");
+				textShadow += `var(--v) var(--v) var(--w) ${darkShadow}`;
 		}
 		textShadow += ";";
 	}
@@ -136,8 +127,8 @@ function penToCss(pen) {
 				color: rgba(${c},${foreAlpha});
 				background: rgba(${cB},${backAlpha});
 				${fontFamilyCss}
+				${fontSizeCss}
 				${textShadow}
-				font-size: ${finalFontSize}px;
 			`
 		.replace(/\s+/g, " ")
 		.trim();
@@ -147,13 +138,23 @@ function json3ToVtt(json) {
 	const pens = json.pens || [];
 	const wpWinPositions = json.wpWinPositions || [];
 
+	const videoRect = video.getBoundingClientRect();
+	const videoWidth = videoRect.width;
+	const videoHeight = videoRect.height;
+	const baseFontPercent = calculateBaseFontSize(videoWidth, videoHeight);
+	const fontScale = baseFontPercent / 100;
+	video.style.setProperty('--caption-fs', `${baseFontPercent}%`);
+	//video.style.setProperty('--caption-scale', `${baseFontPercent / 100}`);
+	video.style.setProperty('--K', `"calc($max(var(${fontScale}), 1px))"`);
+	video.style.setProperty('--v', `"calc($max(var(${fontScale}) * 2, 1px))"`);
+	video.style.setProperty('--w', `"calc($max(var(${fontScale}) * 3, 1px))"`);
+
 	// ---------- build CSS from pens + positions ----------
 	let style = `WEBVTT
 
 STYLE
-::cue { font-family: ${defaultFont}; }
-::cue(v) { font-family: ${defaultFont}; }
-::cue(c) { font-family: ${defaultFont}; }
+::cue(v) { font-family: ${defaultFont}; font-size: var(--caption-fs); }
+::cue(c) { font-family: ${defaultFont}; font-size: var(--caption-fs); }
 `;
 
 	// Add pen styles
@@ -177,7 +178,7 @@ STYLE
 		if (posId > 0 && wpWinPositions[posId]) {
 			const pos = wpWinPositions[posId];
 			let horPos = rd(15.5 + (pos.ahHorPos / 100) * 69, 2);
-			let verPos = Math.max(0, pos.avVerPos != null ? pos.avVerPos - 2 : 2);
+			let verPos = Math.max(0, pos.avVerPos != null ? pos.avVerPos - 2.1 : 2.1);
 			let anchorPoint = pos.apPoint;
 
 			// SRV3 AnchorPoint values:
@@ -220,7 +221,7 @@ STYLE
 
 		const parts = [];
 		ev.segs.forEach((seg) => {
-			if (!seg.utf8) return;
+			if (!seg.utf8.length) return;
 
 			if (
 				hasKaraokeTiming &&
@@ -237,7 +238,7 @@ STYLE
 			parts.push(text);
 		});
 
-		if (!parts.length) continue;
+		if (!parts.length) return;
 
 		let cueText = parts.join("");
 		if (ev.pPenId) {
@@ -335,7 +336,9 @@ const po = new PerformanceObserver((list) => {
 				);
 				createTrack(blobUrl);
 			})
-		.catch((err) => {alert(err.message)});
+			.catch((err) => {
+				alert(err.message);
+			});
 	}
 });
 
