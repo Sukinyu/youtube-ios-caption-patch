@@ -260,11 +260,10 @@ STYLE
 		});
 
 		if (!parts.length) return;
-
+		
+		parts.unshift(`<v${ev.pPenId ? `.pen${ev.pPenId}` : ""}>`);
+		parts.push("</v>");
 		let cueText = parts.join("");
-		if (ev.pPenId) {
-			cueText = `<v.pen${ev.pPenId}>${cueText}</v>`;
-		}
 
 		vtt += `\n${start} --> ${end}${positionAttrs}\n${cueText}\n`;
 	}
@@ -358,7 +357,18 @@ const po = new PerformanceObserver((list) => {
 				createTrack(blobUrl);
 			})
 			.catch((err) => {
-				alert(err.message);
+				alert(err.message + "\nFalling back to VTT format.");
+				tryFetch("vtt").then((vttText) => {
+					// Modify VTT content
+					const modified = vttText
+						.replace(/Style:/g, "STYLE")
+						.replace(/##/g, "");
+
+					const blobUrl = URL.createObjectURL(
+						new Blob([modified], { type: "text/vtt" }),
+					);
+					createTrack(blobUrl);
+				});
 			});
 	}
 });
