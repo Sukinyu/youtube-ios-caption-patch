@@ -217,13 +217,11 @@ STYLE
 					case 8: // Right anchors
 						align += "end";
 						break;
-					default: // Center anchors (1, 4, 7)
-						align += "center";
-						break;
 				}
 			}
 
 			let position = horPos !== 50 ? ` position:${rd(horPos, 2)}%` : "";
+			if (align == '' && horPos !== 50) align = " align:middle"; // Only set align to middle if position is specified without an anchor
 			let lineValue = verPos;
 
 			// WebVTT expects line (vertical) then position (horizontal) then align.
