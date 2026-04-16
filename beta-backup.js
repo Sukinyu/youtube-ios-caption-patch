@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         Fix MWeb Youtube Fullscreen Captions
 // @author       Sukinyu
-// @version      0.3.35
-// @last         4/15/2026 (mm/dd/yyyy)
+// @version      0.3.36
+// @last         4/16/2026 (mm/dd/yyyy)
 // @description  Fix captions on youtube videos in fullscreen mode on iOS (https://m.youtube.com/watch?). Injects a captions track with user-preferred language.
 // @match        https://m.youtube.com/watch?*
 // ==/UserScript==
@@ -11,6 +11,14 @@ const injectedUrls = new Set();
 const video = document.querySelector("video");
 const defaultFont =
 	'"YouTube Noto", Roboto, Arial, Helvetica, Verdana, "PT Sans Caption", sans-serif';
+
+	
+function rgb(num) {
+	return `${(num >> 16) & 255},${(num >> 8) & 255},${num & 255}`;
+}
+function rd(num, decimals = 3) {
+	return Number(num.toFixed(decimals));
+}
 
 function calculateBaseFontSize(videoWidth, videoHeight) {
 	let baseSize = (videoHeight / 360) * 16;
@@ -22,7 +30,7 @@ function calculateBaseFontSize(videoWidth, videoHeight) {
 	}
 
 	// Return a percentage relative to a standard 16px baseline.
-	return baseSize;
+	return rd(baseSize);
 }
 
 function ts(ms) {
@@ -31,12 +39,6 @@ function ts(ms) {
 	const m = String(Math.floor((s % 3600) / 60)).padStart(2, "0");
 	const sec = (s % 60).toFixed(3).padStart(6, "0");
 	return h > 0 ? `${String(h).padStart(2, "0")}:${m}:${sec}` : `${m}:${sec}`;
-}
-function rgb(num) {
-	return `${(num >> 16) & 255},${(num >> 8) & 255},${num & 255}`;
-}
-function rd(num, decimals = 3) {
-	return Number(num.toFixed(decimals));
 }
 
 function penFontFamily(pen) {
@@ -96,7 +98,7 @@ function penToCss(pen) {
 		const scale = face / 16 / 2;
 		//const K = "calc(max(var(--caption-scale), 1) * 1px)";
 		//const v = "calc(max(var(--caption-scale), 1) * 2px)";
-		const w = "calc(max(var(--caption-scale), 1) * 3px)";
+		const w = rd(Math.max(scale * 3, 1));
 
 		let eC = pen.ecEdgeColor != null ? `rgb(${rgb(pen.ecEdgeColor)})` : null;
 		let darkShadow = eC ?? `rgba(34, 34, 34, ${foreAlpha})`;
@@ -148,7 +150,7 @@ function json3ToVtt(json) {
 	const videoRect = video.getBoundingClientRect();
 	const videoWidth = videoRect.width;
 	const videoHeight = videoRect.height;
-	fs = calculateBaseFontSize(videoWidth, videoHeight);
+	const fs = calculateBaseFontSize(videoWidth, videoHeight);
 	updateCaptionStyles();
 
 	// ---------- build CSS from pens + positions ----------
@@ -181,10 +183,13 @@ STYLE
 			const pos = wpWinPositions[posId];
 
 			let horPos = pos.ahHorPos != null ? pos.ahHorPos : 50;
-			let verPos = Math.max(0, pos.avVerPos != null ? pos.avVerPos - 2 : 2);
+			let verPos = pos.avVerPos != null ? pos.avVerPos : 100;
+			//let verPos = Math.max(0, pos.avVerPos != null ? pos.avVerPos - 2 : 2);
 
 			// Horizontal remains beta's current method; vertical follows stable's top-offset adjustment.
 			horPos = horPos * 0.96 + 2;
+			verPos = verPos * 0.96 + 2;
+
 
 			// Font size adjustment for horizontal positioning (left anchors only)
 			const anchorPoint = pos.apPoint;
@@ -308,7 +313,7 @@ const po = new PerformanceObserver((list) => {
 				track = document.createElement("track");
 				track.kind = "captions";
 				track.label = "Injected CC";
-				track.srclang = "en";
+				track.srclang = userLang;
 				track.src = vttUrl;
 				track.default = true;
 				track.setAttribute("data-injected", "");
@@ -371,8 +376,8 @@ function updateCaptionStyles() {
 	const videoWidth = videoRect.width;
 	const videoHeight = videoRect.height;
 	let fs = calculateBaseFontSize(videoWidth, videoHeight);
-	video.style.setProperty("--caption-fs", `${fs}px`);
-	const scale = fs / 16 / 2;
+	video.style.setProperty("--caption-fs", `${rd(fs)}px`);
+	const scale = rd(fs / 16 / 2);
 	video.style.setProperty("--K", `${scale > 1 ? scale : 1}px`);
 	video.style.setProperty("--v", `${scale * 2 > 1 ? scale * 2 : 1}px`);
 	video.style.setProperty("--w", `${scale * 3 ? scale * 3 : 1}px`);
