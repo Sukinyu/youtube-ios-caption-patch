@@ -13,7 +13,6 @@ const defaultFont =
 	'"YouTube Noto", Roboto, Arial, Helvetica, Verdana, "PT Sans Caption", sans-serif';
 
 function calculateBaseFontSize(videoWidth, videoHeight) {
-	const aspectRatio = videoWidth / videoHeight;
 	let baseSize = (videoHeight / 360) * 16;
 
 	if (videoHeight >= videoWidth) {

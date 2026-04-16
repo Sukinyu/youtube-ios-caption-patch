@@ -11,6 +11,9 @@ const injectedUrls = new Set();
 const video = document.querySelector("video");
 const defaultFont =
 	'"YouTube Noto", Roboto, Arial, Helvetica, Verdana, "PT Sans Caption", sans-serif';
+if (typeof fs === "undefined") {
+	let fs = 16;
+}
 
 function calculateBaseFontSize(videoWidth, videoHeight) {
 	let baseSize = (videoHeight / 360) * 16;
@@ -37,18 +40,6 @@ function rgb(num) {
 }
 function rd(num, decimals = 3) {
 	return Number(num.toFixed(decimals));
-}
-
-function containerPctToVideoPct(containerRect, videoRect, pct, axis) {
-	const size = axis === "x" ? containerRect.width : containerRect.height;
-	const offset = axis === "x" ? containerRect.left : containerRect.top;
-	const pageCoord = offset + (pct / 100) * size;
-	const videoStart = axis === "x" ? videoRect.left : videoRect.top;
-	const videoSize = axis === "x" ? videoRect.width : videoRect.height;
-	return rd(
-		Math.max(0, Math.min(100, ((pageCoord - videoStart) / videoSize) * 100)),
-		2,
-	);
 }
 
 function penFontFamily(pen) {
@@ -87,9 +78,9 @@ function penToCss(pen) {
 	const fontSizeIncrement = pen.szPenSize ? pen.szPenSize / 100 - 1 : 0;
 	let fontSizeMultiplier = 1 + 0.25 * fontSizeIncrement;
 	const fontSizeCss =
-		fontSizeMultiplier !== 1 ?
-			`font-size: calc(var(--caption-fs) * ${fontSizeMultiplier});`
-		:	"";
+		fontSizeMultiplier !== 1
+			? `font-size: calc(var(--caption-fs) * ${fontSizeMultiplier});`
+			: "";
 
 	// Colors
 	const c = rgb(pen.fcForeColor ?? 0xffffff);
@@ -105,9 +96,10 @@ function penToCss(pen) {
 	let textShadow = "";
 	if (edgeType) {
 		textShadow = "text-shadow: ";
+		const scale = basefs / 16 / 2;
 		//const K = "calc(max(var(--caption-scale), 1) * 1px)";
 		//const v = "calc(max(var(--caption-scale), 1) * 2px)";
-		//const w = "calc(max(var(--caption-scale), 1) * 3px)";
+		const w = "calc(max(var(--caption-scale), 1) * 3px)";
 
 		let eC = pen.ecEdgeColor != null ? `rgb(${rgb(pen.ecEdgeColor)})` : null;
 		let darkShadow = eC ?? `rgba(34, 34, 34, ${foreAlpha})`;
@@ -123,7 +115,10 @@ function penToCss(pen) {
 				textShadow += Array(5).fill(`0 0 var(--v) ${darkShadow}`).join(", ");
 				break;
 			case 4: // Blur effect
-				textShadow += `var(--v) var(--v) var(--w) ${darkShadow}`;
+				const shadows = [];
+				for (let blur = w; blur <= Math.max(5 * scale, 1); blur += scale) {
+					shadows.push(`var(--v) var(--v) ${rd(blur, 4)}px ${darkShadow}`);
+				}
 		}
 		textShadow += ";";
 	}
@@ -156,7 +151,7 @@ function json3ToVtt(json) {
 	const videoRect = video.getBoundingClientRect();
 	const videoWidth = videoRect.width;
 	const videoHeight = videoRect.height;
-	const basefs = calculateBaseFontSize(videoWidth, videoHeight);
+	fs = calculateBaseFontSize(videoWidth, videoHeight);
 	updateCaptionStyles();
 
 	// ---------- build CSS from pens + positions ----------
@@ -188,50 +183,47 @@ STYLE
 		if (posId > 0 && wpWinPositions[posId]) {
 			const pos = wpWinPositions[posId];
 
-			let horPos = rd(15.5 + (pos.ahHorPos / 100) * 69, 2);
-			let verPos = Math.max(0, pos.avVerPos != null ? pos.avVerPos - 2.1 : 2.1);
+			let horPos = pos.ahHorPos != null ? pos.ahHorPos : 50;
+			let verPos = Math.max(0, pos.avVerPos != null ? pos.avVerPos - 2 : 2);
 
-			
-			/*let horPos = pos.ahHorPos != null ? pos.ahHorPos : 50;
-			let verPos = pos.avVerPos != null ? pos.avVerPos : 0;
-			const containerRect = document.querySelector("#ytp-caption-window-container").getBoundingClientRect();
+			// Horizontal remains beta's current method; vertical follows stable's top-offset adjustment.
+			horPos = horPos * 0.96 + 2;
 
-			if (containerRect && videoRect.width > 0 && videoRect.height > 0) {
-				horPos = containerPctToVideoPct(containerRect, videoRect, horPos, "x");
-				verPos = containerPctToVideoPct(containerRect, videoRect, verPos-2, "y");
-			} else {
-				horPos = rd(15.5 + (horPos / 100) * 69, 2);
-				verPos = Math.max(0, verPos - 2.1);
-			} // Addition ends*/
-			let anchorPoint = pos.apPoint;
-
-			// SRV3 AnchorPoint values:
-			// 0 = top-left, 1 = top-center, 2 = top-right,
-			// 3 = middle-left, 4 = center, 5 = middle-right,
-			// 6 = bottom-left, 7 = bottom-center, 8 = bottom-right.
-
-			// Apply YouTube's positioning scaling (from A(Y) function)
-
+			// Font size adjustment for horizontal positioning (left anchors only)
+			const anchorPoint = pos.apPoint;
 			const leftAnchors = new Set([0, 3, 6]);
-			const rightAnchors = new Set([2, 5, 8]);
-
-			let align = "";
-			if (horPos !== 50 && anchorPoint) {
-				align = " align:";
-				if (anchorPoint) {
-					if (leftAnchors.has(anchorPoint)) {
-						align += "start";
-					} else if (rightAnchors.has(anchorPoint)) {
-						align += "end";
-					} else align += "center";
-				} else {
-					horPos && (align += "center");
+			if (anchorPoint != null && leftAnchors.has(anchorPoint)) {
+				// Find the pen for this event to get font size info
+				const eventPen = ev.pPenId != null ? pens[ev.pPenId] : null;
+				if (eventPen && eventPen.szPenSize) {
+					const fontSizeIncrement = eventPen.szPenSize / 100 - 1;
+					if (fontSizeIncrement > 0) {
+						horPos = Math.max(horPos / (1 + fontSizeIncrement * 2), 2);
+					}
 				}
 			}
 
-			let position =
-				horPos != 50 && !align.length == 0 ? ` position:${rd(horPos, 2)}%` : "";
+			let align = "";
+			if (anchorPoint != null) {
+				align = " align:";
+				switch (anchorPoint) {
+					case 0:
+					case 3:
+					case 6: // Left anchors
+						align += "start";
+						break;
+					case 2:
+					case 5:
+					case 8: // Right anchors
+						align += "end";
+						break;
+					default: // Center anchors (1, 4, 7)
+						align += "center";
+						break;
+				}
+			}
 
+			let position = horPos !== 50 ? ` position:${rd(horPos, 2)}%` : "";
 			let lineValue = verPos;
 
 			// WebVTT expects line (vertical) then position (horizontal) then align.
@@ -263,8 +255,8 @@ STYLE
 		});
 
 		if (!parts.length) return;
-		if (parts.length === 1 && parts[0] == '\n') return; // Skip empty cues from auto-gen
-		
+		if (parts.length === 1 && parts[0] == "\n") return; // Skip empty cues from auto-gen
+
 		parts.unshift(`<v${ev.pPenId ? `.pen${ev.pPenId}` : ""}>`);
 		parts.push("</v>");
 		let cueText = parts.join("");
@@ -383,7 +375,7 @@ function updateCaptionStyles() {
 	const videoRect = video.getBoundingClientRect();
 	const videoWidth = videoRect.width;
 	const videoHeight = videoRect.height;
-	const fs = calculateBaseFontSize(videoWidth, videoHeight);
+	fs = calculateBaseFontSize(videoWidth, videoHeight);
 	video.style.setProperty("--caption-fs", `${fs}px`);
 	const scale = fs / 16 / 2;
 	video.style.setProperty("--K", `${scale > 1 ? scale : 1}px`);
