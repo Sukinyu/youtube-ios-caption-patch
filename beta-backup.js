@@ -11,27 +11,26 @@ const injectedUrls = new Set();
 const video = document.querySelector("video");
 const defaultFont =
 	'"YouTube Noto", Roboto, Arial, Helvetica, Verdana, "PT Sans Caption", sans-serif';
-let currentPens = [];
 
 function calculateBaseFontSize(videoWidth, videoHeight) {
 	let baseSize = (videoHeight / 360) * 16;
+
 	if (videoHeight >= videoWidth) {
 		// Landscape check
 		const threshold = videoHeight > videoWidth * 1.3 ? 480 : 640;
 		baseSize = (videoWidth / threshold) * 16;
 	}
+
+	// Return a percentage relative to a standard 16px baseline.
 	return baseSize;
 }
 
 function ts(ms) {
-	/*
 	const s = ms / 1000;
 	const h = Math.floor(s / 3600);
 	const m = String(Math.floor((s % 3600) / 60)).padStart(2, "0");
 	const sec = (s % 60).toFixed(3).padStart(6, "0");
 	return h > 0 ? `${String(h).padStart(2, "0")}:${m}:${sec}` : `${m}:${sec}`;
-	*/
-	return ms / 1000;
 }
 function rgb(num) {
 	return `${(num >> 16) & 255},${(num >> 8) & 255},${num & 255}`;
@@ -76,7 +75,9 @@ function penToCss(pen) {
 	const fontSizeIncrement = pen.szPenSize ? pen.szPenSize / 100 - 1 : 0;
 	let fontSizeMultiplier = 1 + 0.25 * fontSizeIncrement;
 	const fontSizeCss =
-		fontSizeMultiplier !== 1 ? `font-size: ${fs * fontSizeMultiplier}px;` : "";
+		fontSizeMultiplier !== 1
+			? `font-size: calc(var(--caption-fs) * ${fontSizeMultiplier});`
+			: "";
 
 	// Colors
 	const c = rgb(pen.fcForeColor ?? 0xffffff);
@@ -92,31 +93,29 @@ function penToCss(pen) {
 	let textShadow = "";
 	if (edgeType) {
 		textShadow = "text-shadow: ";
-		const scale = fs / 16 / 2;
-		const K = rd(Math.max(scale, 1));
-		const v = rd(Math.max(scale * 2, 1));
-		const w = rd(Math.max(scale * 3, 1));
+		const scale = face / 16 / 2;
+		//const K = "calc(max(var(--caption-scale), 1) * 1px)";
+		//const v = "calc(max(var(--caption-scale), 1) * 2px)";
+		const w = "calc(max(var(--caption-scale), 1) * 3px)";
 
 		let eC = pen.ecEdgeColor != null ? `rgb(${rgb(pen.ecEdgeColor)})` : null;
 		let darkShadow = eC ?? `rgba(34, 34, 34, ${foreAlpha})`;
 		let lightShadow = eC ?? `rgba(204, 204, 204, ${foreAlpha})`;
 		switch (edgeType) {
 			case 1: // Uniform raised
-				textShadow += `${K}px ${K}px ${darkShadow}, ${K + 1}px ${K + 1}px ${darkShadow}, ${K + 2}px ${K + 2}px ${darkShadow}`;
+				textShadow += `var(--K) var(--K) ${darkShadow}, calc(var(--K) + 1px) calc(var(--K) + 1px) ${darkShadow}, calc(var(--K) + 2px) calc(var(--K) + 2px) ${darkShadow}`;
 				break;
 			case 2: // 3D raised
-				textShadow += `${K}px ${K}px ${lightShadow}, -${K}px -${K}px ${darkShadow}`;
+				textShadow += `var(--K) var(--K) ${lightShadow}, -var(--K) -var(--K) ${darkShadow}`;
 				break;
 			case 3: // Glow (most common)
-				textShadow += Array(5).fill(`0 0 ${v}px ${darkShadow}`).join(", ");
+				textShadow += Array(5).fill(`0 0 var(--v) ${darkShadow}`).join(", ");
 				break;
 			case 4: // Blur effect
 				const shadows = [];
 				for (let blur = w; blur <= Math.max(5 * scale, 1); blur += scale) {
-					shadows.push(`${v}px ${v}px ${rd(blur, 4)}px ${darkShadow}`);
+					shadows.push(`var(--v) var(--v) ${rd(blur, 4)}px ${darkShadow}`);
 				}
-				textShadow += shadows.join(", ");
-				break;
 		}
 		textShadow += ";";
 	}
@@ -141,55 +140,35 @@ function penToCss(pen) {
 		.replace(/\s+/g, " ")
 		.trim();
 }
-
-function setCaptionStyle(cssText) {
-	let styleEl = document.getElementById("vtt-style");
-	if (!styleEl) {
-		styleEl = document.createElement("style");
-		styleEl.id = "vtt-style";
-		document.head.appendChild(styleEl);
-	}
-	styleEl.textContent = cssText;
-}
-
-function generatePenStyles() {
-	if (currentPens.length === 0) return null;
-
-	const vRect = video.getBoundingClientRect();
-	const fs = calculateBaseFontSize(vRect.width, vRect.height);
-	let style = `::cue(v) { font-family: ${defaultFont}; font-size: ${fs}px; }\n`;
-	style += `::cue(c) { font-family: ${defaultFont}; font-size: ${fs}px; }\n`;
-
-	for (let i = 0; i < currentPens.length; i++) {
-		const pen = currentPens[i];
-		if (!pen || Object.keys(pen).length === 0) continue;
-		style += `::cue(.pen${i}) { ${penToCss(pen)} }\n`;
-	}
-
-	return style;
-}
-
-function json3ToVtt(json, track) {
+function json3ToVtt(json) {
 	const events = json.events || [];
 	const pens = json.pens || [];
 	const wpWinPositions = json.wpWinPositions || [];
 
-	let tt = new TextTrack();
-
-	// Store pens globally for resize updates
-	currentPens = pens;
-
 	const videoRect = video.getBoundingClientRect();
 	const videoWidth = videoRect.width;
 	const videoHeight = videoRect.height;
-	const fs = calculateBaseFontSize(videoWidth, videoHeight);
+	fs = calculateBaseFontSize(videoWidth, videoHeight);
 	updateCaptionStyles();
 
 	// ---------- build CSS from pens + positions ----------
-	const style = generatePenStyles();
-	if (style) setCaptionStyle(style);
+	let style = `WEBVTT
+
+STYLE
+::cue(v) { font-family: ${defaultFont}; font-size: var(--caption-fs); }
+::cue(c) { font-family: ${defaultFont}; font-size: var(--caption-fs); }
+`;
+
+	// Add pen styles
+	for (let i = 0; i < pens.length; i++) {
+		const pen = pens[i];
+		if (!pen || Object.keys(pen).length === 0) continue;
+
+		style += `::cue(.pen${i}) { ${penToCss(pen)} }\n`;
+	}
 
 	// ---------- build cues with karaoke timing ----------
+	let vtt = style;
 
 	for (const ev of events) {
 		if (!ev.segs?.length) continue;
@@ -239,7 +218,7 @@ function json3ToVtt(json, track) {
 			}
 
 			let position = horPos !== 50 ? ` position:${rd(horPos, 2)}%` : "";
-			if (align == "" && horPos !== 50) align = " align:middle"; // Only set align to middle if position is specified without an anchor
+			if (align == '' && horPos !== 50) align = " align:middle"; // Only set align to middle if position is specified without an anchor
 			let lineValue = verPos;
 
 			// WebVTT expects line (vertical) then position (horizontal) then align.
@@ -276,11 +255,11 @@ function json3ToVtt(json, track) {
 		parts.unshift(`<v${ev.pPenId ? `.pen${ev.pPenId}` : ""}>`);
 		parts.push("</v>");
 		let cueText = parts.join("");
-		let cue = new VTTCue(start, end, cueText);
-		//vtt += `\n${start} --> ${end}${positionAttrs}\n${cueText}\n`;
+
+		vtt += `\n${start} --> ${end}${positionAttrs}\n${cueText}\n`;
 	}
 	console.log("Generated VTT:\n", vtt);
-	//return vtt;
+	return vtt;
 }
 
 const po = new PerformanceObserver((list) => {
@@ -316,18 +295,29 @@ const po = new PerformanceObserver((list) => {
 		}
 		const translated = newURL.searchParams.has("tlang");
 
-		function createTrack() {
-			let track =
-				video.textTracks &&
-				[...video.textTracks].find((t) => t.label.includes("Injected CC"));
-			if (!track) {
-				track = video.addTextTrack("captions", "Injected CC", userLang);
-				console.log("Injected captions track");
+		function createTrack(vttUrl) {
+			let track = document.querySelector("track[data-injected]");
+			if (track) {
+				if (track.src.startsWith("blob:")) {
+					URL.revokeObjectURL(track.src);
+					console.log("Revoked old blob URL:", track.src);
+				}
+				track.src = vttUrl;
+				console.log("Updated captions track:", vttUrl);
+			} else {
+				track = document.createElement("track");
+				track.kind = "captions";
+				track.label = "Injected CC";
+				track.srclang = "en";
+				track.src = vttUrl;
+				track.default = true;
+				track.setAttribute("data-injected", "");
+				video.appendChild(track);
+				console.log("Injected captions track:", vttUrl);
 			}
 			if (translated) {
 				track.label += " (TS)"; // short form of "Translated"
 			}
-			return track;
 		}
 
 		const tryFetch = (returnFormat) => {
@@ -338,7 +328,7 @@ const po = new PerformanceObserver((list) => {
 				return r.text();
 			});
 		};
-		/*
+
 		// Try JSON3 first, fallback to VTT
 		tryFetch("json3")
 			.then((json) => {
@@ -371,31 +361,21 @@ const po = new PerformanceObserver((list) => {
 					createTrack(blobUrl);
 				});
 			});
-*/
-
-		tryFetch("json3").then((json) => {
-			let json3;
-			let track = createTrack();
-			try {
-				json3 = JSON.parse(json);
-			} catch {
-				json = json.replace(/"utf8":\s*"([\s\S]*?)"/g, (match, content) => {
-					const fixed = content.replace(/\n/g, "\\n"); // Fix newlines
-					return `"utf8": "${fixed}"`;
-				});
-				json3 = JSON.parse(json);
-			}
-			console.log(json3ToVtt(json3));
-		});
 	}
 });
 
 po.observe({ type: "resource", buffered: true });
 
 function updateCaptionStyles() {
-	// Regenerate pen styles on resize to reflect new video dimensions
-	const style = generatePenStyles();
-	if (style) setCaptionStyle(style);
+	const videoRect = video.getBoundingClientRect();
+	const videoWidth = videoRect.width;
+	const videoHeight = videoRect.height;
+	let fs = calculateBaseFontSize(videoWidth, videoHeight);
+	video.style.setProperty("--caption-fs", `${fs}px`);
+	const scale = fs / 16 / 2;
+	video.style.setProperty("--K", `${scale > 1 ? scale : 1}px`);
+	video.style.setProperty("--v", `${scale * 2 > 1 ? scale * 2 : 1}px`);
+	video.style.setProperty("--w", `${scale * 3 ? scale * 3 : 1}px`);
 }
 
 window.addEventListener("resize", updateCaptionStyles);

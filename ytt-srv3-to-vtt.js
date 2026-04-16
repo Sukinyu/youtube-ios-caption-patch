@@ -1,37 +1,14 @@
-// ==UserScript==
-// @name         Fix MWeb Youtube Fullscreen Captions
-// @author       Sukinyu
-// @version      0.3.35
-// @last         4/15/2026 (mm/dd/yyyy)
-// @description  Fix captions on youtube videos in fullscreen mode on iOS (https://m.youtube.com/watch?). Injects a captions track with user-preferred language.
-// @match        https://m.youtube.com/watch?*
-// ==/UserScript==
-
 const injectedUrls = new Set();
 const video = document.querySelector("video");
 const defaultFont =
 	'"YouTube Noto", Roboto, Arial, Helvetica, Verdana, "PT Sans Caption", sans-serif';
-let currentPens = [];
-
-function calculateBaseFontSize(videoWidth, videoHeight) {
-	let baseSize = (videoHeight / 360) * 16;
-	if (videoHeight >= videoWidth) {
-		// Landscape check
-		const threshold = videoHeight > videoWidth * 1.3 ? 480 : 640;
-		baseSize = (videoWidth / threshold) * 16;
-	}
-	return baseSize;
-}
 
 function ts(ms) {
-	/*
 	const s = ms / 1000;
 	const h = Math.floor(s / 3600);
 	const m = String(Math.floor((s % 3600) / 60)).padStart(2, "0");
 	const sec = (s % 60).toFixed(3).padStart(6, "0");
 	return h > 0 ? `${String(h).padStart(2, "0")}:${m}:${sec}` : `${m}:${sec}`;
-	*/
-	return ms / 1000;
 }
 function rgb(num) {
 	return `${(num >> 16) & 255},${(num >> 8) & 255},${num & 255}`;
@@ -68,15 +45,14 @@ function penToCss(pen) {
 	const videoWidth = videoRect.width;
 	const videoHeight = videoRect.height;
 
-	// Calculate base font percent (YouTube's N3e function returns a size relative to 16px)
-	let fs = calculateBaseFontSize(videoWidth, videoHeight);
+	let fs = 16;
 
 	// Font size multiplier (YouTube's SzJ function)
 	// szPenSize is converted to fontSizeIncrement: (szPenSize / 100) - 1
 	const fontSizeIncrement = pen.szPenSize ? pen.szPenSize / 100 - 1 : 0;
 	let fontSizeMultiplier = 1 + 0.25 * fontSizeIncrement;
 	const fontSizeCss =
-		fontSizeMultiplier !== 1 ? `font-size: ${fs * fontSizeMultiplier}px;` : "";
+		fontSizeMultiplier !== 1 ? `font-size: ${fs * fontSizeMultiplier});` : "";
 
 	// Colors
 	const c = rgb(pen.fcForeColor ?? 0xffffff);
@@ -92,17 +68,21 @@ function penToCss(pen) {
 	let textShadow = "";
 	if (edgeType) {
 		textShadow = "text-shadow: ";
-		const scale = fs / 16 / 2;
-		const K = rd(Math.max(scale, 1));
-		const v = rd(Math.max(scale * 2, 1));
-		const w = rd(Math.max(scale * 3, 1));
+		const scale = baseFontSize / 16 / 2; // Base scale factor
+		const K = rd(Math.max(scale, 1), 4);
+		const v = rd(Math.max(2 * scale, 1), 4);
+		const w = rd(Math.max(3 * scale, 1), 4);
 
 		let eC = pen.ecEdgeColor != null ? `rgb(${rgb(pen.ecEdgeColor)})` : null;
 		let darkShadow = eC ?? `rgba(34, 34, 34, ${foreAlpha})`;
 		let lightShadow = eC ?? `rgba(204, 204, 204, ${foreAlpha})`;
 		switch (edgeType) {
 			case 1: // Uniform raised
-				textShadow += `${K}px ${K}px ${darkShadow}, ${K + 1}px ${K + 1}px ${darkShadow}, ${K + 2}px ${K + 2}px ${darkShadow}`;
+				const step = window.devicePixelRatio >= 2 ? 0.5 : 1;
+				textShadow += Array.from(
+					{ length: Math.ceil((w - K) / step) + 1 },
+					(_, i) => `${K + i * step}px ${K + i * step}px ${darkShadow}`,
+				).join(", ");
 				break;
 			case 2: // 3D raised
 				textShadow += `${K}px ${K}px ${lightShadow}, -${K}px -${K}px ${darkShadow}`;
@@ -116,7 +96,6 @@ function penToCss(pen) {
 					shadows.push(`${v}px ${v}px ${rd(blur, 4)}px ${darkShadow}`);
 				}
 				textShadow += shadows.join(", ");
-				break;
 		}
 		textShadow += ";";
 	}
@@ -141,55 +120,34 @@ function penToCss(pen) {
 		.replace(/\s+/g, " ")
 		.trim();
 }
-
-function setCaptionStyle(cssText) {
-	let styleEl = document.getElementById("vtt-style");
-	if (!styleEl) {
-		styleEl = document.createElement("style");
-		styleEl.id = "vtt-style";
-		document.head.appendChild(styleEl);
-	}
-	styleEl.textContent = cssText;
-}
-
-function generatePenStyles() {
-	if (currentPens.length === 0) return null;
-
-	const vRect = video.getBoundingClientRect();
-	const fs = calculateBaseFontSize(vRect.width, vRect.height);
-	let style = `::cue(v) { font-family: ${defaultFont}; font-size: ${fs}px; }\n`;
-	style += `::cue(c) { font-family: ${defaultFont}; font-size: ${fs}px; }\n`;
-
-	for (let i = 0; i < currentPens.length; i++) {
-		const pen = currentPens[i];
-		if (!pen || Object.keys(pen).length === 0) continue;
-		style += `::cue(.pen${i}) { ${penToCss(pen)} }\n`;
-	}
-
-	return style;
-}
-
-function json3ToVtt(json, track) {
+function json3ToVtt(json) {
 	const events = json.events || [];
 	const pens = json.pens || [];
 	const wpWinPositions = json.wpWinPositions || [];
 
-	let tt = new TextTrack();
-
-	// Store pens globally for resize updates
-	currentPens = pens;
-
 	const videoRect = video.getBoundingClientRect();
 	const videoWidth = videoRect.width;
 	const videoHeight = videoRect.height;
-	const fs = calculateBaseFontSize(videoWidth, videoHeight);
-	updateCaptionStyles();
+	const fs = 16;
 
 	// ---------- build CSS from pens + positions ----------
-	const style = generatePenStyles();
-	if (style) setCaptionStyle(style);
+	let style = `WEBVTT
+
+STYLE
+::cue(v) { font-family: ${defaultFont}; font-size: ${fs}; }
+::cue(c) { font-family: ${defaultFont}; font-size: ${fs}; }
+`;
+
+	// Add pen styles
+	for (let i = 0; i < pens.length; i++) {
+		const pen = pens[i];
+		if (!pen || Object.keys(pen).length === 0) continue;
+
+		style += `::cue(.pen${i}) { ${penToCss(pen)} }\n`;
+	}
 
 	// ---------- build cues with karaoke timing ----------
+	let vtt = style;
 
 	for (const ev of events) {
 		if (!ev.segs?.length) continue;
@@ -276,126 +234,12 @@ function json3ToVtt(json, track) {
 		parts.unshift(`<v${ev.pPenId ? `.pen${ev.pPenId}` : ""}>`);
 		parts.push("</v>");
 		let cueText = parts.join("");
-		let cue = new VTTCue(start, end, cueText);
-		//vtt += `\n${start} --> ${end}${positionAttrs}\n${cueText}\n`;
+
+		vtt += `\n${start} --> ${end}${positionAttrs}\n${cueText}\n`;
 	}
-	console.log("Generated VTT:\n", vtt);
-	//return vtt;
+	return vtt;
 }
 
-const po = new PerformanceObserver((list) => {
-	for (const entry of list.getEntries()) {
-		const url = entry.name;
-		if (!url.includes("/api/timedtext") || injectedUrls.has(url)) continue;
-		injectedUrls.add(url);
 
-		console.log("Caption request detected:", url);
-		let newURL = new URL(url);
-		const removeParams = [
-			"potc",
-			"xorb",
-			"xobt",
-			"xovt",
-			"cbr",
-			"cbrver",
-			"cver",
-			"cplayer",
-			"cos",
-			"cosver",
-			"cplatform",
-		];
-		[...newURL.searchParams.keys()].forEach(
-			(key) => removeParams.includes(key) && newURL.searchParams.delete(key),
-		);
-		const userLang = navigator.language.split("-")[0] || "en"; // Use browser language or default to English
-		if (
-			!newURL.searchParams.has("lang", userLang) &&
-			!newURL.searchParams.has("tlang")
-		) {
-			newURL.searchParams.set("tlang", userLang);
-		}
-		const translated = newURL.searchParams.has("tlang");
-
-		function createTrack() {
-			let track =
-				video.textTracks &&
-				[...video.textTracks].find((t) => t.label.includes("Injected CC"));
-			if (!track) {
-				track = video.addTextTrack("captions", "Injected CC", userLang);
-				console.log("Injected captions track");
-			}
-			if (translated) {
-				track.label += " (TS)"; // short form of "Translated"
-			}
-			return track;
-		}
-
-		const tryFetch = (returnFormat) => {
-			newURL.searchParams.set("fmt", returnFormat);
-			injectedUrls.add(newURL.toString());
-			return fetch(newURL).then((r) => {
-				if (!r.ok) throw new Error(`HTTP ${r.status}`);
-				return r.text();
-			});
-		};
-		/*
-		// Try JSON3 first, fallback to VTT
-		tryFetch("json3")
-			.then((json) => {
-				let json3;
-				try {
-					json3 = JSON.parse(json);
-				} catch {
-					json = json.replace(/"utf8":\s*"([\s\S]*?)"/g, (match, content) => {
-						const fixed = content.replace(/\n/g, "\\n"); // Fix newlines
-						return `"utf8": "${fixed}"`;
-					});
-					json3 = JSON.parse(json);
-				}
-				const blobUrl = URL.createObjectURL(
-					new Blob([json3ToVtt(json3)], { type: "text/vtt" }),
-				);
-				createTrack(blobUrl);
-			})
-			.catch((err) => {
-				alert(err.message + "\nFalling back to VTT format.");
-				tryFetch("vtt").then((vttText) => {
-					// Modify VTT content
-					const modified = vttText
-						.replace(/Style:/g, "STYLE")
-						.replace(/##/g, "");
-
-					const blobUrl = URL.createObjectURL(
-						new Blob([modified], { type: "text/vtt" }),
-					);
-					createTrack(blobUrl);
-				});
-			});
-*/
-
-		tryFetch("json3").then((json) => {
-			let json3;
-			let track = createTrack();
-			try {
-				json3 = JSON.parse(json);
-			} catch {
-				json = json.replace(/"utf8":\s*"([\s\S]*?)"/g, (match, content) => {
-					const fixed = content.replace(/\n/g, "\\n"); // Fix newlines
-					return `"utf8": "${fixed}"`;
-				});
-				json3 = JSON.parse(json);
-			}
-			console.log(json3ToVtt(json3));
-		});
-	}
-});
-
-po.observe({ type: "resource", buffered: true });
-
-function updateCaptionStyles() {
-	// Regenerate pen styles on resize to reflect new video dimensions
-	const style = generatePenStyles();
-	if (style) setCaptionStyle(style);
-}
-
-window.addEventListener("resize", updateCaptionStyles);
+// json3 var is the parsed srv3 JSON data from youtube
+console.log("Generated VTT:\n", json3ToVtt(json3));
