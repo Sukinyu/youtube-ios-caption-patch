@@ -11,10 +11,6 @@ const injectedUrls = new Set();
 const video = document.querySelector("video");
 const defaultFont =
 	'"YouTube Noto", Roboto, Arial, Helvetica, Verdana, "PT Sans Caption", sans-serif';
-if (typeof fs === "undefined") {
-	let fs = 16;
-}
-alert(fs);
 
 function calculateBaseFontSize(videoWidth, videoHeight) {
 	let baseSize = (videoHeight / 360) * 16;
@@ -72,7 +68,7 @@ function penToCss(pen) {
 	const videoHeight = videoRect.height;
 
 	// Calculate base font percent (YouTube's N3e function returns a size relative to 16px)
-	let basefs = calculateBaseFontSize(videoWidth, videoHeight);
+	let fs = calculateBaseFontSize(videoWidth, videoHeight);
 
 	// Font size multiplier (YouTube's SzJ function)
 	// szPenSize is converted to fontSizeIncrement: (szPenSize / 100) - 1
@@ -97,7 +93,7 @@ function penToCss(pen) {
 	let textShadow = "";
 	if (edgeType) {
 		textShadow = "text-shadow: ";
-		const scale = basefs / 16 / 2;
+		const scale = face / 16 / 2;
 		//const K = "calc(max(var(--caption-scale), 1) * 1px)";
 		//const v = "calc(max(var(--caption-scale), 1) * 2px)";
 		const w = "calc(max(var(--caption-scale), 1) * 3px)";
@@ -374,7 +370,7 @@ function updateCaptionStyles() {
 	const videoRect = video.getBoundingClientRect();
 	const videoWidth = videoRect.width;
 	const videoHeight = videoRect.height;
-	fs = calculateBaseFontSize(videoWidth, videoHeight);
+	let fs = calculateBaseFontSize(videoWidth, videoHeight);
 	video.style.setProperty("--caption-fs", `${fs}px`);
 	const scale = fs / 16 / 2;
 	video.style.setProperty("--K", `${scale > 1 ? scale : 1}px`);
