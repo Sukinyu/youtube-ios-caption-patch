@@ -14,6 +14,7 @@ const defaultFont =
 if (typeof fs === "undefined") {
 	let fs = 16;
 }
+alert(fs);
 
 function calculateBaseFontSize(videoWidth, videoHeight) {
 	let baseSize = (videoHeight / 360) * 16;
