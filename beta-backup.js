@@ -12,7 +12,6 @@ const video = document.querySelector("video");
 const defaultFont =
 	'"YouTube Noto", Roboto, Arial, Helvetica, Verdana, "PT Sans Caption", sans-serif';
 
-	
 function rgb(num) {
 	return `${(num >> 16) & 255},${(num >> 8) & 255},${num & 255}`;
 }
@@ -174,6 +173,7 @@ STYLE
 
 	for (const ev of events) {
 		if (!ev.segs?.length) continue;
+		if (ev.segs[0].utf8 === "\n") continue; // Skip auto-generated empty cues
 
 		// Get position data for this event
 		const posId = ev.wpWinPosId;
@@ -189,7 +189,6 @@ STYLE
 			// Horizontal remains beta's current method; vertical follows stable's top-offset adjustment.
 			horPos = horPos * 0.96 + 2;
 			verPos = verPos * 0.96 + 2;
-
 
 			// Font size adjustment for horizontal positioning (left anchors only)
 			const anchorPoint = pos.apPoint;
@@ -223,7 +222,7 @@ STYLE
 			}
 
 			let position = horPos !== 50 ? ` position:${rd(horPos, 2)}%` : "";
-			if (align == '' && horPos !== 50) align = " align:middle"; // Only set align to middle if position is specified without an anchor
+			if (align == "" && horPos !== 50) align = " align:middle"; // Only set align to middle if position is specified without an anchor
 			let lineValue = verPos;
 
 			// WebVTT expects line (vertical) then position (horizontal) then align.
@@ -233,18 +232,13 @@ STYLE
 		// Build cues - combine karaoke and non-karaoke into one payload-based cue
 		const start = ts(ev.tStartMs);
 		const end = ts(ev.tStartMs + (ev.dDurationMs || 0));
-		const hasKaraokeTiming = ev.segs.some((seg) => seg.tStartMs != null);
 
 		const parts = [];
 		ev.segs.forEach((seg) => {
 			if (!seg.utf8.length) return;
 
-			if (
-				hasKaraokeTiming &&
-				seg.tStartMs != null &&
-				seg.tStartMs !== ev.tStartMs
-			) {
-				parts.push(`<${ts(seg.tStartMs)}>`);
+			if (seg.tOffsetMs) {
+				parts.push(`<${ts(ev.tStartMs + seg.tOffsetMs)}>`);
 			}
 
 			let text = seg.utf8;
