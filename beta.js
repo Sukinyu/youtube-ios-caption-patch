@@ -198,12 +198,12 @@ function mapPosToCue(pos, pen, fs) {
 			case 2:
 			case 5:
 			case 8:
-				align = "center";
+				align = "right";
 				break;
 			case 1:
 			case 4:
 			case 7:
-				align = "right";
+				align = "center";
 				break;
 		}
 	}
