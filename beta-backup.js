@@ -15,7 +15,7 @@ const defaultFont =
 function rgb(num) {
 	return `${(num >> 16) & 255},${(num >> 8) & 255},${num & 255}`;
 }
-function rd(num, decimals = 3) {
+function rd(num, decimals = 4) {
 	return Number(num.toFixed(decimals));
 }
 
@@ -27,8 +27,6 @@ function calculateBaseFontSize(videoWidth, videoHeight) {
 		const threshold = videoHeight > videoWidth * 1.3 ? 480 : 640;
 		baseSize = (videoWidth / threshold) * 16;
 	}
-
-	// Return a percentage relative to a standard 16px baseline.
 	return rd(baseSize);
 }
 
@@ -117,6 +115,8 @@ function penToCss(pen) {
 				for (let blur = w; blur <= Math.max(5 * scale, 1); blur += scale) {
 					shadows.push(`var(--v) var(--v) ${rd(blur, 4)}px ${darkShadow}`);
 				}
+				textShadow += shadows.join(", ");
+				break;
 		}
 		textShadow += ";";
 	}

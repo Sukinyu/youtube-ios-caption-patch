@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Fix MWeb Youtube Fullscreen Captions
 // @author       Sukinyu
-// @version      0.3.35
+// @version      0.3.37
 // @last         4/15/2026 (mm/dd/yyyy)
 // @description  Fix captions on youtube videos in fullscreen mode on iOS (https://m.youtube.com/watch?). Injects a captions track with user-preferred language.
 // @match        https://m.youtube.com/watch?*
@@ -20,7 +20,7 @@ function calculateBaseFontSize(videoWidth, videoHeight) {
 		const threshold = videoHeight > videoWidth * 1.3 ? 480 : 640;
 		baseSize = (videoWidth / threshold) * 16;
 	}
-	return baseSize;
+	return rd(baseSize);
 }
 
 function ts(ms) {
@@ -36,7 +36,7 @@ function ts(ms) {
 function rgb(num) {
 	return `${(num >> 16) & 255},${(num >> 8) & 255},${num & 255}`;
 }
-function rd(num, decimals = 3) {
+function rd(num, decimals = 4) {
 	return Number(num.toFixed(decimals));
 }
 
@@ -169,12 +169,10 @@ function generatePenStyles() {
 	return style;
 }
 
-function json3ToVtt(json, track) {
+function addCuesToTrack(track, json) {
 	const events = json.events || [];
 	const pens = json.pens || [];
 	const wpWinPositions = json.wpWinPositions || [];
-
-	let tt = new TextTrack();
 
 	// Store pens globally for resize updates
 	currentPens = pens;
@@ -190,19 +188,17 @@ function json3ToVtt(json, track) {
 	if (style) setCaptionStyle(style);
 
 	// ---------- build cues with karaoke timing ----------
-
 	for (const ev of events) {
 		if (!ev.segs?.length) continue;
-
+		if (ev.segs[0].utf8 === "\n") continue; // Skip auto-generated empty cues
 		// Get position data for this event
 		const posId = ev.wpWinPosId;
-		let positionAttrs = "";
+		let verPos, horPos, align;
 
 		if (posId > 0 && wpWinPositions[posId]) {
 			const pos = wpWinPositions[posId];
-
-			let horPos = pos.ahHorPos != null ? pos.ahHorPos : 50;
-			let verPos = Math.max(0, pos.avVerPos != null ? pos.avVerPos - 2 : 2);
+			 horPos = pos.ahHorPos != null ? pos.ahHorPos : 50;
+			 verPos = Math.max(0, pos.avVerPos != null ? pos.avVerPos - 2 : 2);
 
 			// Horizontal remains beta's current method; vertical follows stable's top-offset adjustment.
 			horPos = horPos * 0.96 + 2;
@@ -221,46 +217,37 @@ function json3ToVtt(json, track) {
 				}
 			}
 
-			let align = "";
 			if (anchorPoint != null) {
-				align = " align:";
 				switch (anchorPoint) {
 					case 0:
 					case 3:
 					case 6: // Left anchors
-						align += "start";
+						align = "start";
 						break;
 					case 2:
 					case 5:
 					case 8: // Right anchors
-						align += "end";
-						break;
+						align = "end";
 				}
 			}
 
-			let position = horPos !== 50 ? ` position:${rd(horPos, 2)}%` : "";
-			if (align == "" && horPos !== 50) align = " align:middle"; // Only set align to middle if position is specified without an anchor
-			let lineValue = verPos;
+			let position = horPos !== 50 ? rd(horPos, 2) : null;
+			if (align == "" && horPos !== 50) align = "middle"; // Only set align to middle if position is specified without an anchor
 
 			// WebVTT expects line (vertical) then position (horizontal) then align.
-			positionAttrs = ` line:${rd(lineValue, 2)}%${position}${align}`;
+			//positionAttrs = ` line:${rd(lineValue, 2)}%${position}${align}`;
 		}
 
 		// Build cues - combine karaoke and non-karaoke into one payload-based cue
 		const start = ts(ev.tStartMs);
 		const end = ts(ev.tStartMs + (ev.dDurationMs || 0));
-		const hasKaraokeTiming = ev.segs.some((seg) => seg.tStartMs != null);
-
+		
 		const parts = [];
 		ev.segs.forEach((seg) => {
 			if (!seg.utf8.length) return;
 
-			if (
-				hasKaraokeTiming &&
-				seg.tStartMs != null &&
-				seg.tStartMs !== ev.tStartMs
-			) {
-				parts.push(`<${ts(seg.tStartMs)}>`);
+			if (seg.tOffsetMs) {
+				parts.push(`<${ts(ev.tStartMs + seg.tOffsetMs)}>`);
 			}
 
 			let text = seg.utf8;
@@ -270,17 +257,19 @@ function json3ToVtt(json, track) {
 			parts.push(text);
 		});
 
-		if (!parts.length) return;
-		if (parts.length === 1 && parts[0] == "\n") return; // Skip empty cues from auto-gen
+		if (!parts.length) continue;
+		if (parts.length === 1 && parts[0] == "\n") continue; // Skip empty cues from auto-gen
 
 		parts.unshift(`<v${ev.pPenId ? `.pen${ev.pPenId}` : ""}>`);
 		parts.push("</v>");
 		let cueText = parts.join("");
 		let cue = new VTTCue(start, end, cueText);
+		cue.line = verPos;
+		horPos && (cue.position = horPos);
+		align && (cue.align = align);
+		track.addCue(cue);
 		//vtt += `\n${start} --> ${end}${positionAttrs}\n${cueText}\n`;
 	}
-	console.log("Generated VTT:\n", vtt);
-	//return vtt;
 }
 
 const po = new PerformanceObserver((list) => {
@@ -323,10 +312,13 @@ const po = new PerformanceObserver((list) => {
 			if (!track) {
 				track = video.addTextTrack("captions", "Injected CC", userLang);
 				console.log("Injected captions track");
+			} else {
+				track.cues && [...track.cues].forEach((cue) => track.removeCue(cue)); // Clear existing cues
 			}
 			if (translated) {
 				track.label += " (TS)"; // short form of "Translated"
 			}
+			track.mode = "showing";
 			return track;
 		}
 
@@ -375,7 +367,7 @@ const po = new PerformanceObserver((list) => {
 
 		tryFetch("json3").then((json) => {
 			let json3;
-			let track = createTrack();
+			track = createTrack();
 			try {
 				json3 = JSON.parse(json);
 			} catch {
@@ -385,7 +377,7 @@ const po = new PerformanceObserver((list) => {
 				});
 				json3 = JSON.parse(json);
 			}
-			console.log(json3ToVtt(json3));
+			addCuesToTrack(track, json3);
 		});
 	}
 });
