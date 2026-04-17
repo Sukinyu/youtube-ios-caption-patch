@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         Fix MWeb Youtube Fullscreen Captions
 // @author       Sukinyu
-// @version      0.3.38
-// @last         4/17/2026 (mm/dd/yyyy)
+// @version      0.3.37
+// @last         4/15/2026 (mm/dd/yyyy)
 // @description  Fix captions on youtube videos in fullscreen mode on iOS (https://m.youtube.com/watch?). Injects a captions track with user-preferred language.
 // @match        https://m.youtube.com/watch?*
 // ==/UserScript==
@@ -169,6 +169,62 @@ function generatePenStyles() {
 	return style;
 }
 
+function mapYoutubePositionToCue(pos, pen) {
+	if (!pos) return null;
+
+	const rawHor = pos.ahHorPos != null ? pos.ahHorPos : 50;
+	const rawVer = pos.avVerPos != null ? pos.avVerPos : 50;
+	const anchorPoint = pos.apPoint;
+	const hasAnchor = anchorPoint != null;
+
+	let hor = rawHor * 0.96 + 2;
+	const ver = rawVer * 0.96 + 2;
+
+	const fontSizeIncrement = pen?.szPenSize ? pen.szPenSize / 100 - 1 : 0;
+	if (hasAnchor && [0, 3, 6].includes(anchorPoint) && fontSizeIncrement > 0) {
+		hor = Math.max(hor / (1 + fontSizeIncrement * 2), 2);
+	}
+
+	let position = null;
+	let align = null;
+	let lineAlign = "start";
+
+	if (hasAnchor) {
+		switch (anchorPoint) {
+			case 0:
+			case 3:
+			case 6:
+				align = "start";
+				position = hor;
+				lineAlign = "start";
+				break;
+			case 1:
+			case 4:
+			case 7:
+				align = "center";
+				position = hor;
+				lineAlign = "center";
+				break;
+			case 2:
+			case 5:
+			case 8:
+				align = "end";
+				position = 100 - hor;
+				lineAlign = "end";
+		}
+	} else if (hor !== 50) {
+		align = "middle";
+		position = hor;
+	}
+
+	return {
+		line: ver,
+		position,
+		align,
+		lineAlign
+	};
+}
+
 function addCuesToTrack(track, json) {
 	const events = json.events || [];
 	const pens = json.pens || [];
@@ -186,9 +242,10 @@ function addCuesToTrack(track, json) {
 	// ---------- build CSS from pens + positions ----------
 	const style = generatePenStyles();
 	if (style) setCaptionStyle(style);
-
+	let i = 0;
 	// ---------- build cues with karaoke timing ----------
 	for (const ev of events) {
+		i++;
 		const start = ts(ev.tStartMs);
 		const end = ts(ev.tStartMs + (ev.dDurationMs || 0));
 
@@ -221,55 +278,24 @@ function addCuesToTrack(track, json) {
 
 		// Get position data for this event
 		const posId = ev.wpWinPosId;
-		let verPos, horPos, align;
 
-		if (posId > 0 && wpWinPositions[posId]) {
+		if (posId != null && wpWinPositions[posId]) {
 			const pos = wpWinPositions[posId];
-			horPos = pos.ahHorPos != null ? pos.ahHorPos : 50;
-			//verPos = Math.max(0, pos.avVerPos != null ? pos.avVerPos - 2 : 2);
+			const eventPen = ev.pPenId != null ? pens[ev.pPenId] : null;
+			const placement = mapYoutubePositionToCue(pos, eventPen);
 
-			// Horizontal remains beta's current method; vertical follows stable's top-offset adjustment.
-			horPos = horPos * 0.96 + 2;
-			//verPos = 0.8 + (pos.avVerPos / 100) * 97.2;
-			verPos = 1.0231579 * pos.avVerPos - 4.315789;
-
-			// Font size adjustment for horizontal positioning (left anchors only)
-			const anchorPoint = pos.apPoint;
-			const leftAnchors = new Set([0, 3, 6]);
-			if (anchorPoint != null && leftAnchors.has(anchorPoint)) {
-				// Find the pen for this event to get font size info
-				const eventPen = ev.pPenId != null ? pens[ev.pPenId] : null;
-				if (eventPen && eventPen.szPenSize) {
-					const fontSizeIncrement = eventPen.szPenSize / 100 - 1;
-					if (fontSizeIncrement > 0) {
-						horPos = Math.max(horPos / (1 + fontSizeIncrement * 2), 2);
-					}
+			if (placement) {
+				cue.line = rd(placement.line, 2);
+				cue.lineAlign = placement.lineAlign;
+				if (placement.position != null) {
+					cue.position = rd(placement.position, 2);
+				}
+				if (placement.align) {
+					cue.align = placement.align;
 				}
 			}
-
-			if (anchorPoint != null) {
-				switch (anchorPoint) {
-					case 0:
-					case 3:
-					case 6: // Left anchors
-						align = "start";
-						break;
-					case 2:
-					case 5:
-					case 8: // Right anchors
-						align = "end";
-				}
-			}
-
-			let position = horPos !== 50 ? rd(horPos, 2) : null;
-			if (align == "" && horPos !== 50) align = "middle"; // Only set align to middle if position is specified without an anchor
-			cue.line = verPos;
-			horPos && (cue.position = horPos);
-			align && (cue.align = align);
-			// WebVTT expects line (vertical) then position (horizontal) then align.
-			//positionAttrs = ` line:${rd(lineValue, 2)}%${position}${align}`;
 		}
-
+		cue.id = "ev" + i;
 		track.addCue(cue);
 		//vtt += `\n${start} --> ${end}${positionAttrs}\n${cueText}\n`;
 	}
