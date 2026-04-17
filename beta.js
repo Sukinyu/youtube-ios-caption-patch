@@ -25,11 +25,11 @@ function calculateBaseFontSize(videoWidth, videoHeight) {
 
 function ts(ms, format = false) {
 	if (format) {
-	const s = ms / 1000;
-	const h = Math.floor(s / 3600);
-	const m = String(Math.floor((s % 3600) / 60)).padStart(2, "0");
-	const sec = (s % 60).toFixed(3).padStart(6, "0");
-	return h > 0 ? `${String(h).padStart(2, "0")}:${m}:${sec}` : `${m}:${sec}`;
+		const s = ms / 1000;
+		const h = Math.floor(s / 3600);
+		const m = String(Math.floor((s % 3600) / 60)).padStart(2, "0");
+		const sec = (s % 60).toFixed(3).padStart(6, "0");
+		return h > 0 ? `${String(h).padStart(2, "0")}:${m}:${sec}` : `${m}:${sec}`;
 	}
 	return ms / 1000;
 }
@@ -169,7 +169,7 @@ function generatePenStyles() {
 }
 
 function mapPosToCue(pos, pen, fs) {
-	if (!pos) return {line: 90, position: 21.5, size:70, align: "left"};
+	if (!pos) return { line: 90, position: 21.5, size: 70, align: "left" };
 
 	const rawHor = pos.ahHorPos != null ? pos.ahHorPos : 50;
 	let rawVer = pos.avVerPos != null ? pos.avVerPos : 100;
@@ -233,7 +233,9 @@ function addCuesToTrack(track, json) {
 	// ---------- build CSS from pens + positions ----------
 	const style = generatePenStyles();
 	if (style) setCaptionStyle(style);
-	// ---------- build cues with karaoke timing ----------
+
+	// ---------- build cues array first ----------
+	const cuesArray = [];
 	for (const ev of events) {
 		if (!ev.segs || !ev.segs.length) continue; // Skip events without segments
 		const start = ts(ev.tStartMs);
@@ -262,22 +264,46 @@ function addCuesToTrack(track, json) {
 		if (!ev.segs?.length) continue;
 		if (ev.segs[0].utf8 === "\n") continue; // Skip auto-generated empty cues
 
+		cue.snapToLines = false; // Gets set later if needed, but defaults to true and want false
+
 		// Get position data for this event
 		const posId = ev.wpWinPosId;
 
-			const pos = wpWinPositions[posId];
-			const eventPen = ev.pPenId != null ? pens[ev.pPenId] : null;
-			const placement = mapPosToCue(pos, eventPen, fs);
+		const pos = wpWinPositions[posId];
+		const eventPen = ev.pPenId != null ? pens[ev.pPenId] : null;
+		const placement = mapPosToCue(pos, eventPen, fs);
 
-			placement.line && (cue.line = rd(placement.line, 2));
-			cue.lineAlign = placement.lineAlign;
-			if (placement.position != null) {
-				cue.position = rd(placement.position, 2);
+		placement.line && (cue.line = rd(placement.line, 2));
+		cue.lineAlign = placement.lineAlign;
+		if (placement.position != null) {
+			cue.position = rd(placement.position, 2);
+		}
+		placement.align && (cue.align = placement.align);
+		placement.positionAlign && (cue.positionAlign = placement.positionAlign);
+
+		cuesArray.push(cue);
+	}
+
+	// ---------- detect overlapping cues and set snapToLines ----------
+	for (let i = 0; i < cuesArray.length; i++) {
+		for (let j = i + 1; j < cuesArray.length; j++) {
+			const cue1 = cuesArray[i];
+			const cue2 = cuesArray[j];
+			// Check if time ranges overlap
+			if (cue1.endTime > cue2.startTime && cue1.startTime < cue2.endTime) {
+				cue1.snapToLines = true;
+				cue2.snapToLines = true;
 			}
-			placement.align && (cue.align = placement.align);
-			placement.positionAlign && (cue.positionAlign = placement.positionAlign);
+		}
+	}
 
-		track.addCue(cue);
+	// ---------- add all cues to track ----------
+	for (const cue of cuesArray) {
+		try {
+			track.addCue(cue);
+		} catch (e) {
+			console.warn("Failed to add cue:", e);
+		}
 	}
 	console.log(`Added cues to track: ${track.cues ? track.cues.length : 0}`);
 }
@@ -321,7 +347,12 @@ const po = new PerformanceObserver((list) => {
 				[...video.textTracks].find((t) => t.label.includes("Injected CC"));
 			if (!track) {
 				track = video.addTextTrack("captions", "Injected CC", userLang);
-				track.oncuechange = () => {track.mode = "hidden"; track.mode = 'showing';};
+				track.oncuechange = () => {
+					if (track?.activeCues > 1) {
+						track.mode = "hidden";
+						track.mode = "showing";
+					}
+				};
 				console.log("Injected captions track");
 			} else {
 				if (track.cues) {
