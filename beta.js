@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         Fix MWeb Youtube Fullscreen Captions
 // @author       Sukinyu
-// @version      0.3.37
-// @last         4/15/2026 (mm/dd/yyyy)
+// @version      0.3.38
+// @last         4/17/2026 (mm/dd/yyyy)
 // @description  Fix captions on youtube videos in fullscreen mode on iOS (https://m.youtube.com/watch?). Injects a captions track with user-preferred language.
 // @match        https://m.youtube.com/watch?*
 // ==/UserScript==
@@ -157,8 +157,8 @@ function generatePenStyles() {
 
 	const vRect = video.getBoundingClientRect();
 	const fs = calculateBaseFontSize(vRect.width, vRect.height);
-	let style = `::cue(v) { font-family: ${defaultFont}; font-size: ${fs}px; }\n`;
-	style += `::cue(c) { font-family: ${defaultFont}; font-size: ${fs}px; }\n`;
+	let style = `::cue(v) { font-family: ${defaultFont}; font-size: ${fs}px; line-height: normal;}\n`;
+	style += `::cue(c) { font-family: ${defaultFont}; font-size: ${fs}px; line-height: normal;}\n`;
 
 	for (let i = 0; i < currentPens.length; i++) {
 		const pen = currentPens[i];
@@ -169,23 +169,26 @@ function generatePenStyles() {
 	return style;
 }
 
-function mapYoutubePositionToCue(pos, pen) {
+function mapPosToCue(pos, pen, fs) {
 	if (!pos) return null;
 
+	const vRect = video.getBoundingClientRect();
+	const rect = document.querySelector("ytd-player").getBoundingClientRect();
+
 	const rawHor = pos.ahHorPos != null ? pos.ahHorPos : 50;
-	const rawVer = pos.avVerPos != null ? pos.avVerPos : 50;
+	let rawVer = pos.avVerPos != null ? pos.avVerPos : 100;
 	const anchorPoint = pos.apPoint;
 	const hasAnchor = anchorPoint != null;
 
 	let hor = rawHor * 0.96 + 2;
-	const ver = rawVer * 0.96 + 2;
+	let ver = rawVer * 0.96 + 2;
 
 	const fontSizeIncrement = pen?.szPenSize ? pen.szPenSize / 100 - 1 : 0;
 	if (hasAnchor && [0, 3, 6].includes(anchorPoint) && fontSizeIncrement > 0) {
 		hor = Math.max(hor / (1 + fontSizeIncrement * 2), 2);
 	}
 
-	let position = null;
+	let position = hor;
 	let align = null;
 	let lineAlign = "start";
 
@@ -195,33 +198,26 @@ function mapYoutubePositionToCue(pos, pen) {
 			case 3:
 			case 6:
 				align = "start";
-				position = hor;
-				lineAlign = "start";
 				break;
 			case 1:
 			case 4:
 			case 7:
 				align = "center";
-				position = hor;
-				lineAlign = "center";
 				break;
 			case 2:
 			case 5:
 			case 8:
 				align = "end";
-				position = 100 - hor;
-				lineAlign = "end";
 		}
 	} else if (hor !== 50) {
-		align = "middle";
-		position = hor;
+		align = "center";
 	}
 
 	return {
 		line: ver,
 		position,
 		align,
-		lineAlign
+		lineAlign,
 	};
 }
 
@@ -282,7 +278,7 @@ function addCuesToTrack(track, json) {
 		if (posId != null && wpWinPositions[posId]) {
 			const pos = wpWinPositions[posId];
 			const eventPen = ev.pPenId != null ? pens[ev.pPenId] : null;
-			const placement = mapYoutubePositionToCue(pos, eventPen);
+			const placement = mapPosToCue(pos, eventPen, fs);
 
 			if (placement) {
 				cue.line = rd(placement.line, 2);
@@ -293,6 +289,7 @@ function addCuesToTrack(track, json) {
 				if (placement.align) {
 					cue.align = placement.align;
 				}
+				cue.lineAlign = "end";
 			}
 		}
 		cue.id = "ev" + i;
