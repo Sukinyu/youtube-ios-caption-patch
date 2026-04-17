@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Fix MWeb Youtube Fullscreen Captions
 // @author       Sukinyu
-// @version      0.3.38
+// @version      0.3.39
 // @last         4/17/2026 (mm/dd/yyyy)
 // @description  Fix captions on youtube videos in fullscreen mode on iOS (https://m.youtube.com/watch?). Injects a captions track with user-preferred language.
 // @match        https://m.youtube.com/watch?*
@@ -68,11 +68,10 @@ function penToCss(pen) {
 	const videoWidth = videoRect.width;
 	const videoHeight = videoRect.height;
 
-	// Calculate base font percent (YouTube's N3e function returns a size relative to 16px)
+	// Calculate base font percent (YouTube's N3e function)
 	let fs = calculateBaseFontSize(videoWidth, videoHeight);
 
 	// Font size multiplier (YouTube's SzJ function)
-	// szPenSize is converted to fontSizeIncrement: (szPenSize / 100) - 1
 	const fontSizeIncrement = pen.szPenSize ? pen.szPenSize / 100 - 1 : 0;
 	let fontSizeMultiplier = 1 + 0.25 * fontSizeIncrement;
 	const fontSizeCss =
@@ -80,7 +79,7 @@ function penToCss(pen) {
 
 	// Colors
 	const c = rgb(pen.fcForeColor ?? 0xffffff);
-	const foreAlpha = rd(pen.foForeAlpha != null ? pen.foForeAlpha / 255 : 1, 4);
+	const foreAlpha = rd(pen.foForeAlpha != null ? pen.foForeAlpha / 255 : 1);
 	const cB = rgb(pen.bcBackColor ?? 0);
 	const backAlpha = rd(
 		pen.boBackAlpha != null ? pen.boBackAlpha / 255 : 0.5,
@@ -184,13 +183,14 @@ function mapPosToCue(pos, pen, fs) {
 	let ver = rawVer * 0.96 + 2;
 
 	const fontSizeIncrement = pen?.szPenSize ? pen.szPenSize / 100 - 1 : 0;
-	if (hasAnchor && [0, 3, 6].includes(anchorPoint) && fontSizeIncrement > 0) {
+	if (hasAnchor && [0, 3, 6].includes(anchorPoint)) {
 		hor = Math.max(hor / (1 + fontSizeIncrement * 2), 2);
+		console.log("Adjusted hor for left anchor:", hor);
 	}
 
 	let position = hor;
 	let align = null;
-	let lineAlign = "start";
+	let lineAlign = "end";
 
 	if (hasAnchor) {
 		switch (anchorPoint) {
@@ -198,19 +198,15 @@ function mapPosToCue(pos, pen, fs) {
 			case 3:
 			case 6:
 				align = "start";
-				break;
-			case 1:
-			case 4:
-			case 7:
-				align = "center";
+				lineAlign = "start";
+				positionAlign = "line-left";
+				hor = hor * 6 + 2;
 				break;
 			case 2:
 			case 5:
 			case 8:
 				align = "end";
 		}
-	} else if (hor !== 50) {
-		align = "center";
 	}
 
 	return {
@@ -218,6 +214,7 @@ function mapPosToCue(pos, pen, fs) {
 		position,
 		align,
 		lineAlign,
+		positionAlign,
 	};
 }
 
@@ -242,9 +239,9 @@ function addCuesToTrack(track, json) {
 	// ---------- build cues with karaoke timing ----------
 	for (const ev of events) {
 		i++;
+		if (!ev.segs || !ev.segs.length) continue; // Skip events without segments
 		const start = ts(ev.tStartMs);
 		const end = ts(ev.tStartMs + (ev.dDurationMs || 0));
-
 		const parts = [];
 		ev.segs.forEach((seg) => {
 			if (!seg.utf8.length) return;
@@ -260,7 +257,6 @@ function addCuesToTrack(track, json) {
 			parts.push(text);
 		});
 
-		if (!parts.length) continue;
 		if (parts.length === 1 && parts[0] == "\n") continue; // Skip empty cues from auto-gen
 
 		parts.unshift(`<v${ev.pPenId ? `.pen${ev.pPenId}` : ""}>`);
@@ -268,7 +264,6 @@ function addCuesToTrack(track, json) {
 		let cueText = parts.join("");
 		let cue = new VTTCue(start, end, cueText);
 		cue.snapToLines = false; // Allow precise vertical positioning
-
 		if (!ev.segs?.length) continue;
 		if (ev.segs[0].utf8 === "\n") continue; // Skip auto-generated empty cues
 
@@ -286,10 +281,9 @@ function addCuesToTrack(track, json) {
 				if (placement.position != null) {
 					cue.position = rd(placement.position, 2);
 				}
-				if (placement.align) {
-					cue.align = placement.align;
-				}
-				cue.lineAlign = "end";
+				placement.align && (cue.align = placement.align);
+				placement.positionAlign &&
+					(cue.positionAlign = placement.positionAlign);
 			}
 		}
 		cue.id = "ev" + i;
