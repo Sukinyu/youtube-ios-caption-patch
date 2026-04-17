@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Fix MWeb Youtube Fullscreen Captions
 // @author       Sukinyu
-// @version      0.3.39
+// @version      0.3.40
 // @last         4/17/2026 (mm/dd/yyyy)
 // @description  Fix captions on youtube videos in fullscreen mode on iOS (https://m.youtube.com/watch?). Injects a captions track with user-preferred language.
 // @match        https://m.youtube.com/watch?*
@@ -23,14 +23,14 @@ function calculateBaseFontSize(videoWidth, videoHeight) {
 	return rd(baseSize);
 }
 
-function ts(ms) {
-	/*
+function ts(ms, format = false) {
+	if (format) {
 	const s = ms / 1000;
 	const h = Math.floor(s / 3600);
 	const m = String(Math.floor((s % 3600) / 60)).padStart(2, "0");
 	const sec = (s % 60).toFixed(3).padStart(6, "0");
 	return h > 0 ? `${String(h).padStart(2, "0")}:${m}:${sec}` : `${m}:${sec}`;
-	*/
+	}
 	return ms / 1000;
 }
 function rgb(num) {
@@ -169,10 +169,7 @@ function generatePenStyles() {
 }
 
 function mapPosToCue(pos, pen, fs) {
-	if (!pos) return null;
-
-	const vRect = video.getBoundingClientRect();
-	const rect = document.querySelector("ytd-player").getBoundingClientRect();
+	if (!pos) return {line: 90, position: 21.5, size:70, align: "left"};
 
 	const rawHor = pos.ahHorPos != null ? pos.ahHorPos : 50;
 	let rawVer = pos.avVerPos != null ? pos.avVerPos : 100;
@@ -187,25 +184,27 @@ function mapPosToCue(pos, pen, fs) {
 		hor = Math.max(hor / (1 + fontSizeIncrement * 2), 2);
 		console.log("Adjusted hor for left anchor:", hor);
 	}
-
 	let position = hor;
 	let align = null;
-	let lineAlign = "end";
+	let positionAlign = null;
 
 	if (hasAnchor) {
 		switch (anchorPoint) {
 			case 0:
 			case 3:
 			case 6:
-				align = "start";
-				lineAlign = "start";
-				positionAlign = "line-left";
-				hor = hor * 6 + 2;
+				align = "left";
 				break;
 			case 2:
 			case 5:
 			case 8:
-				align = "end";
+				align = "center";
+				break;
+			case 1:
+			case 4:
+			case 7:
+				align = "right";
+				break;
 		}
 	}
 
@@ -213,7 +212,6 @@ function mapPosToCue(pos, pen, fs) {
 		line: ver,
 		position,
 		align,
-		lineAlign,
 		positionAlign,
 	};
 }
@@ -235,10 +233,8 @@ function addCuesToTrack(track, json) {
 	// ---------- build CSS from pens + positions ----------
 	const style = generatePenStyles();
 	if (style) setCaptionStyle(style);
-	let i = 0;
 	// ---------- build cues with karaoke timing ----------
 	for (const ev of events) {
-		i++;
 		if (!ev.segs || !ev.segs.length) continue; // Skip events without segments
 		const start = ts(ev.tStartMs);
 		const end = ts(ev.tStartMs + (ev.dDurationMs || 0));
@@ -247,7 +243,7 @@ function addCuesToTrack(track, json) {
 			if (!seg.utf8.length) return;
 
 			if (seg.tOffsetMs) {
-				parts.push(`<${ts(ev.tStartMs + seg.tOffsetMs)}>`);
+				parts.push(`<${ts(ev.tStartMs + seg.tOffsetMs, true)}>`); // Karaoke timing
 			}
 
 			let text = seg.utf8;
@@ -263,33 +259,27 @@ function addCuesToTrack(track, json) {
 		parts.push("</v>");
 		let cueText = parts.join("");
 		let cue = new VTTCue(start, end, cueText);
-		cue.snapToLines = false; // Allow precise vertical positioning
 		if (!ev.segs?.length) continue;
 		if (ev.segs[0].utf8 === "\n") continue; // Skip auto-generated empty cues
 
 		// Get position data for this event
 		const posId = ev.wpWinPosId;
 
-		if (posId != null && wpWinPositions[posId]) {
 			const pos = wpWinPositions[posId];
 			const eventPen = ev.pPenId != null ? pens[ev.pPenId] : null;
 			const placement = mapPosToCue(pos, eventPen, fs);
 
-			if (placement) {
-				cue.line = rd(placement.line, 2);
-				cue.lineAlign = placement.lineAlign;
-				if (placement.position != null) {
-					cue.position = rd(placement.position, 2);
-				}
-				placement.align && (cue.align = placement.align);
-				placement.positionAlign &&
-					(cue.positionAlign = placement.positionAlign);
+			placement.line && (cue.line = rd(placement.line, 2));
+			cue.lineAlign = placement.lineAlign;
+			if (placement.position != null) {
+				cue.position = rd(placement.position, 2);
 			}
-		}
-		cue.id = "ev" + i;
+			placement.align && (cue.align = placement.align);
+			placement.positionAlign && (cue.positionAlign = placement.positionAlign);
+
 		track.addCue(cue);
-		//vtt += `\n${start} --> ${end}${positionAttrs}\n${cueText}\n`;
 	}
+	console.log(`Added cues to track: ${track.cues ? track.cues.length : 0}`);
 }
 
 const po = new PerformanceObserver((list) => {
@@ -331,14 +321,16 @@ const po = new PerformanceObserver((list) => {
 				[...video.textTracks].find((t) => t.label.includes("Injected CC"));
 			if (!track) {
 				track = video.addTextTrack("captions", "Injected CC", userLang);
+				track.oncuechange = () => {track.mode = "hidden"; track.mode = 'showing';};
 				console.log("Injected captions track");
 			} else {
-				track.cues && [...track.cues].forEach((cue) => track.removeCue(cue)); // Clear existing cues
+				if (track.cues) {
+					[...track.cues].forEach((cue) => track.removeCue(cue)); // Clear existing cues
+				}
 			}
 			if (translated) {
 				track.label += " (TS)"; // short form of "Translated"
 			}
-			track.mode = "showing";
 			return track;
 		}
 
