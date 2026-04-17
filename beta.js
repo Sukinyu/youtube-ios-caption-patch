@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         Fix MWeb Youtube Fullscreen Captions
 // @author       Sukinyu
-// @version      0.3.37
-// @last         4/15/2026 (mm/dd/yyyy)
+// @version      0.3.38
+// @last         4/17/2026 (mm/dd/yyyy)
 // @description  Fix captions on youtube videos in fullscreen mode on iOS (https://m.youtube.com/watch?). Injects a captions track with user-preferred language.
 // @match        https://m.youtube.com/watch?*
 // ==/UserScript==
@@ -189,19 +189,49 @@ function addCuesToTrack(track, json) {
 
 	// ---------- build cues with karaoke timing ----------
 	for (const ev of events) {
+		const start = ts(ev.tStartMs);
+		const end = ts(ev.tStartMs + (ev.dDurationMs || 0));
+
+		const parts = [];
+		ev.segs.forEach((seg) => {
+			if (!seg.utf8.length) return;
+
+			if (seg.tOffsetMs) {
+				parts.push(`<${ts(ev.tStartMs + seg.tOffsetMs)}>`);
+			}
+
+			let text = seg.utf8;
+			if (seg.pPenId != null) {
+				text = `<c.pen${seg.pPenId}>${text}</c>`;
+			}
+			parts.push(text);
+		});
+
+		if (!parts.length) continue;
+		if (parts.length === 1 && parts[0] == "\n") continue; // Skip empty cues from auto-gen
+
+		parts.unshift(`<v${ev.pPenId ? `.pen${ev.pPenId}` : ""}>`);
+		parts.push("</v>");
+		let cueText = parts.join("");
+		let cue = new VTTCue(start, end, cueText);
+		cue.snapToLines = false; // Allow precise vertical positioning
+
 		if (!ev.segs?.length) continue;
 		if (ev.segs[0].utf8 === "\n") continue; // Skip auto-generated empty cues
+
 		// Get position data for this event
 		const posId = ev.wpWinPosId;
 		let verPos, horPos, align;
 
 		if (posId > 0 && wpWinPositions[posId]) {
 			const pos = wpWinPositions[posId];
-			 horPos = pos.ahHorPos != null ? pos.ahHorPos : 50;
-			 verPos = Math.max(0, pos.avVerPos != null ? pos.avVerPos - 2 : 2);
+			horPos = pos.ahHorPos != null ? pos.ahHorPos : 50;
+			//verPos = Math.max(0, pos.avVerPos != null ? pos.avVerPos - 2 : 2);
 
 			// Horizontal remains beta's current method; vertical follows stable's top-offset adjustment.
 			horPos = horPos * 0.96 + 2;
+			//verPos = 0.8 + (pos.avVerPos / 100) * 97.2;
+			verPos = 1.0231579 * pos.avVerPos - 4.315789;
 
 			// Font size adjustment for horizontal positioning (left anchors only)
 			const anchorPoint = pos.apPoint;
@@ -233,40 +263,13 @@ function addCuesToTrack(track, json) {
 
 			let position = horPos !== 50 ? rd(horPos, 2) : null;
 			if (align == "" && horPos !== 50) align = "middle"; // Only set align to middle if position is specified without an anchor
-
+			cue.line = verPos;
+			horPos && (cue.position = horPos);
+			align && (cue.align = align);
 			// WebVTT expects line (vertical) then position (horizontal) then align.
 			//positionAttrs = ` line:${rd(lineValue, 2)}%${position}${align}`;
 		}
 
-		// Build cues - combine karaoke and non-karaoke into one payload-based cue
-		const start = ts(ev.tStartMs);
-		const end = ts(ev.tStartMs + (ev.dDurationMs || 0));
-		
-		const parts = [];
-		ev.segs.forEach((seg) => {
-			if (!seg.utf8.length) return;
-
-			if (seg.tOffsetMs) {
-				parts.push(`<${ts(ev.tStartMs + seg.tOffsetMs)}>`);
-			}
-
-			let text = seg.utf8;
-			if (seg.pPenId != null) {
-				text = `<c.pen${seg.pPenId}>${text}</c>`;
-			}
-			parts.push(text);
-		});
-
-		if (!parts.length) continue;
-		if (parts.length === 1 && parts[0] == "\n") continue; // Skip empty cues from auto-gen
-
-		parts.unshift(`<v${ev.pPenId ? `.pen${ev.pPenId}` : ""}>`);
-		parts.push("</v>");
-		let cueText = parts.join("");
-		let cue = new VTTCue(start, end, cueText);
-		cue.line = verPos;
-		horPos && (cue.position = horPos);
-		align && (cue.align = align);
 		track.addCue(cue);
 		//vtt += `\n${start} --> ${end}${positionAttrs}\n${cueText}\n`;
 	}
