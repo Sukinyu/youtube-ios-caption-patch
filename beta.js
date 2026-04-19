@@ -348,14 +348,6 @@ const po = new PerformanceObserver((list) => {
 			if (!track) {
 				track = video.addTextTrack("captions", "Injected CC", userLang);
 				track.mode = "showing";
-				track.oncuechange = () => {
-					if (track?.activeCues > 1) {
-						setTimeout(() => {
-						track.mode = "hidden";
-						track.mode = "showing";
-						}, 2);
-					}
-				};
 				console.log("Injected captions track");
 			} else {
 				if (track.cues) {
