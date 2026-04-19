@@ -156,8 +156,8 @@ function generatePenStyles() {
 
 	const vRect = video.getBoundingClientRect();
 	const fs = calculateBaseFontSize(vRect.width, vRect.height);
-	let style = `::cue(v) { font-family: ${defaultFont}; font-size: ${fs}px; line-height: normal;}\n`;
-	style += `::cue(c) { font-family: ${defaultFont}; font-size: ${fs}px; line-height: normal;}\n`;
+	let style = `::cue(v) { font-family: ${defaultFont}; font-size: ${fs}px; line-height: normal; background: rgba(0,0,0,0.5);}\n`;
+	style += `::cue(c) { font-family: ${defaultFont}; font-size: ${fs}px; line-height: normal; background: rgba(0,0,0,0.5);}\n`;
 
 	for (let i = 0; i < currentPens.length; i++) {
 		const pen = currentPens[i];
@@ -347,10 +347,13 @@ const po = new PerformanceObserver((list) => {
 				[...video.textTracks].find((t) => t.label.includes("Injected CC"));
 			if (!track) {
 				track = video.addTextTrack("captions", "Injected CC", userLang);
+				track.mode = "showing";
 				track.oncuechange = () => {
 					if (track?.activeCues > 1) {
+						setTimeout(() => {
 						track.mode = "hidden";
 						track.mode = "showing";
+						}, 2);
 					}
 				};
 				console.log("Injected captions track");

@@ -206,7 +206,7 @@ STYLE
 
 			let align = "";
 			if (anchorPoint != null) {
-				align = " align:";
+				if (horPos != 50) align = " align:";
 				switch (anchorPoint) {
 					case 0:
 					case 3:
