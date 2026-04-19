@@ -158,7 +158,7 @@ function generatePenStyles() {
 	const fs = calculateBaseFontSize(vRect.width, vRect.height);
 	let style = `::cue(v) { font-family: ${defaultFont}; font-size: ${fs}px; line-height: normal; }\n`;
 	style += `::cue(v.bg) { background: rgba(0,0,0,0.5);}\n`;
-	style += `::cue(c) { font-family: ${defaultFont}; font-size: ${fs}px; line-height: normal; background: rgba(0,0,0,0.5);}\n`;
+	style += `::cue(c) { font-family: ${defaultFont}; font-size: ${fs}px; line-height: normal; }\n`;
 
 	for (let i = 0; i < currentPens.length; i++) {
 		const pen = currentPens[i];
@@ -257,14 +257,16 @@ function addCuesToTrack(track, json) {
 
 		if (parts.length === 1 && parts[0] == "\n") continue; // Skip empty cues from auto-gen
 
-		parts.unshift(`<v${parts.includes('</c>') ? '.bg' : ''}${ev.pPenId ? `.pen${ev.pPenId}` : ""}>`);
-		parts.push("</v>");
+		parts.unshift(
+			`<c${parts.includes("</c>") ? ".bg" : ""}${ev.pPenId ? `.pen${ev.pPenId}` : ""}>`,
+		);
+		parts.push("</c>");
 		let cueText = parts.join("");
 		let cue = new VTTCue(start, end, cueText);
 		if (!ev.segs?.length) continue;
 		if (ev.segs[0].utf8 === "\n") continue; // Skip auto-generated empty cues
 
-		cue.snapToLines = true; // Gets set later if needed, but defaults to true and want false
+		cue.snapToLines = wpWinPositions ? false : true; // Gets set later if needed, but defaults to true and want false
 
 		// Get position data for this event
 		const posId = ev.wpWinPosId;
@@ -286,7 +288,7 @@ function addCuesToTrack(track, json) {
 
 	// ---------- detect overlapping cues, merge left-align lines, and set snapToLines ----------
 	for (let i = 0; i < track.cues.length; i++) {
-		for (let j = i + 1; j < track.cues.length; j++) {
+		for (let j = i + 1; j < Math.min(i + 2, track.cues.length); j++) {
 			const cue1 = track.cues[i];
 			const cue2 = track.cues[j];
 			// Check if time ranges overlap
@@ -412,7 +414,11 @@ const po = new PerformanceObserver((list) => {
 				});
 				json3 = JSON.parse(json);
 			}
-			addCuesToTrack(track, json3);
+			try {
+				addCuesToTrack(track, json3);
+			} catch (err) {
+				console.error("Error adding captions:", err, "\n", err.stack);
+			}
 		});
 	}
 });
