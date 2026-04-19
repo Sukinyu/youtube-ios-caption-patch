@@ -156,7 +156,8 @@ function generatePenStyles() {
 
 	const vRect = video.getBoundingClientRect();
 	const fs = calculateBaseFontSize(vRect.width, vRect.height);
-	let style = `::cue(v) { font-family: ${defaultFont}; font-size: ${fs}px; line-height: normal; background: rgba(0,0,0,0.5);}\n`;
+	let style = `::cue(v) { font-family: ${defaultFont}; font-size: ${fs}px; line-height: normal; }\n`;
+	style += `::cue(v.bg) { background: rgba(0,0,0,0.5);}\n`;
 	style += `::cue(c) { font-family: ${defaultFont}; font-size: ${fs}px; line-height: normal; background: rgba(0,0,0,0.5);}\n`;
 
 	for (let i = 0; i < currentPens.length; i++) {
@@ -235,7 +236,6 @@ function addCuesToTrack(track, json) {
 	if (style) setCaptionStyle(style);
 
 	// ---------- build cues array first ----------
-	const cuesArray = [];
 	for (const ev of events) {
 		if (!ev.segs || !ev.segs.length) continue; // Skip events without segments
 		const start = ts(ev.tStartMs);
@@ -257,14 +257,14 @@ function addCuesToTrack(track, json) {
 
 		if (parts.length === 1 && parts[0] == "\n") continue; // Skip empty cues from auto-gen
 
-		parts.unshift(`<v${ev.pPenId ? `.pen${ev.pPenId}` : ""}>`);
+		parts.unshift(`<v${parts.includes('</c>') ? '.bg' : ''}${ev.pPenId ? `.pen${ev.pPenId}` : ""}>`);
 		parts.push("</v>");
 		let cueText = parts.join("");
 		let cue = new VTTCue(start, end, cueText);
 		if (!ev.segs?.length) continue;
 		if (ev.segs[0].utf8 === "\n") continue; // Skip auto-generated empty cues
 
-		cue.snapToLines = false; // Gets set later if needed, but defaults to true and want false
+		cue.snapToLines = true; // Gets set later if needed, but defaults to true and want false
 
 		// Get position data for this event
 		const posId = ev.wpWinPosId;
@@ -281,28 +281,25 @@ function addCuesToTrack(track, json) {
 		placement.align && (cue.align = placement.align);
 		placement.positionAlign && (cue.positionAlign = placement.positionAlign);
 
-		cuesArray.push(cue);
+		track.addCue(cue);
 	}
 
-	// ---------- detect overlapping cues and set snapToLines ----------
-	for (let i = 0; i < cuesArray.length; i++) {
-		for (let j = i + 1; j < cuesArray.length; j++) {
-			const cue1 = cuesArray[i];
-			const cue2 = cuesArray[j];
+	// ---------- detect overlapping cues, merge left-align lines, and set snapToLines ----------
+	for (let i = 0; i < track.cues.length; i++) {
+		for (let j = i + 1; j < track.cues.length; j++) {
+			const cue1 = track.cues[i];
+			const cue2 = track.cues[j];
 			// Check if time ranges overlap
-			if (cue1.endTime > cue2.startTime && cue1.startTime < cue2.endTime) {
-				cue1.snapToLines = true;
-				cue2.snapToLines = true;
+			if (cue1.endTime > cue2.startTime && cue1.startTime <= cue2.endTime) {
+				// If both cues are left-aligned, append the next cue text into the first cue
+				// using an in-cue timestamp tag, then delay the second cue start to the end of the first.
+				if (cue1.align === "left" && cue2.align === "left") {
+					const timestamp = `<${ts(cue2.startTime * 1000, true)}>`;
+					cue1.text += `\n${timestamp}${cue2.text}`;
+					cue2.startTime = cue1.endTime;
+					if (cue2.endtime == cue1.endTime) track.removeCue(cue2);
+				}
 			}
-		}
-	}
-
-	// ---------- add all cues to track ----------
-	for (const cue of cuesArray) {
-		try {
-			track.addCue(cue);
-		} catch (e) {
-			console.warn("Failed to add cue:", e);
 		}
 	}
 	console.log(`Added cues to track: ${track.cues ? track.cues.length : 0}`);
