@@ -380,7 +380,7 @@ function updateCaptionStyles() {
 	if (style) setCaptionStyle(style);
 	const track = video?.textTracks[0];
 	if (track?.mode === "showing") {
-		alert("track");
+		track.mode = 'showing';
 	}
 }
 
