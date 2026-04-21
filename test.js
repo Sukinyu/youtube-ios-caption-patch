@@ -167,7 +167,7 @@ function generatePenStyles() {
 }
 
 function mapPosToCue(pos, pen) {
-	if (!pos) return { line: 98, position: 46.4, align: "left" };
+	if (!pos) return { line: 98, position: 46.4,  align: "left" };
 
 	const rawHor = pos.ahHorPos != null ? pos.ahHorPos : 50;
 	let rawVer = pos.avVerPos != null ? pos.avVerPos : 100;
@@ -190,7 +190,7 @@ function mapPosToCue(pos, pen) {
 			case 0:
 			case 3:
 			case 6:
-				align = "left";
+				align = "start";
 				break;
 			case 2:
 			case 5:
@@ -200,12 +200,12 @@ function mapPosToCue(pos, pen) {
 			case 1:
 			case 4:
 			case 7:
-				align = "center";
+				align = "end";
 				break;
 		}
 	}
 
-	return { line: ver, position, align };
+	return { line: ver, position, align, lineAlign: align};
 }
 
 function addCuesToTrack(track, json) {
@@ -268,7 +268,7 @@ function addCuesToTrack(track, json) {
 		placement.align && (cue.align = placement.align);
 		track.addCue(cue);
 	}
-
+	/*
 	// ---------- detect overlapping cues, merge left-align lines, and set snapToLines ----------
 	for (let i = 0; i < track.cues.length; i++) {
 		for (let j = i + 1; j < Math.min(i + 3, track.cues.length); j++) {
@@ -287,6 +287,7 @@ function addCuesToTrack(track, json) {
 			}
 		}
 	}
+	*/
 }
 
 const po = new PerformanceObserver((list) => {
@@ -390,16 +391,5 @@ if (winTitle) {
 			track.mode = "hidden";
 			track.mode = "showing";
 		} // Refresh
-		alert("Title changed, refreshed captions. Current track state: " + track?.mode);
 	}).observe(winTitle, { characterData: true });
 }
-
-setTimeout(() => {
-	const track = video?.textTracks[0];
-  alert(
-    "TRACK CHECK\n" +
-    "mode: " + track.mode + "\n" +
-    "cues: " + track.cues.length + "\n" +
-    "active: " + (track.activeCues?.length ?? 0)
-  );
-}, 4000);
