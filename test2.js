@@ -299,9 +299,9 @@ const po = new PerformanceObserver((list) => {
 	for (const entry of list.getEntries()) {
 		const url = entry.name;
 		if (!url.includes("/api/timedtext") || injectedUrls.has(url)) continue;
+		alert("timedtext URL detected ✅\n" + url.substring(0, 120) + "...");
 		injectedUrls.add(url);
 
-		alert("Caption request detected:", url);
 		let newURL = new URL(url);
 		const removeParams = [
 			"potc",
