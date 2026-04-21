@@ -257,13 +257,11 @@ function addCuesToTrack(track, json) {
 
 		// Get position data for this event
 		const posId = ev.wpWinPosId;
-
 		const pos = wpWinPositions[posId];
 		const eventPen = ev.pPenId != null ? pens[ev.pPenId] : null;
 		const placement = mapPosToCue(pos, eventPen);
 
 		placement.line && (cue.line = rd(placement.line, 2));
-		cue.lineAlign = placement.lineAlign;
 		if (placement.position != null) {
 			cue.position = rd(placement.position, 2);
 		}
@@ -273,7 +271,7 @@ function addCuesToTrack(track, json) {
 
 	// ---------- detect overlapping cues, merge left-align lines, and set snapToLines ----------
 	for (let i = 0; i < track.cues.length; i++) {
-		for (let j = i + 1; j < Math.min(i + 2, track.cues.length); j++) {
+		for (let j = i + 1; j < Math.min(i + 3, track.cues.length); j++) {
 			const cue1 = track.cues[i];
 			const cue2 = track.cues[j];
 			// Check if time ranges overlap
@@ -289,7 +287,7 @@ function addCuesToTrack(track, json) {
 			}
 		}
 	}
-	console.log(`Added cues to track: ${track.cues ? track.cues.length : 0}`);
+	alert(`Added cues to track: ${track.cues ? track.cues.length : 0}`);
 }
 
 const po = new PerformanceObserver((list) => {
