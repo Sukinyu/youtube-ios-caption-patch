@@ -267,7 +267,6 @@ function addCuesToTrack(track, json) {
 		}
 		placement.align && (cue.align = placement.align);
 		track.addCue(cue);
-		alert(cue);
 	}
 
 	// ---------- detect overlapping cues, merge left-align lines, and set snapToLines ----------
@@ -391,8 +390,8 @@ if (winTitle) {
 			track.mode = "hidden";
 			track.mode = "showing";
 		} // Refresh
-		alert("Title changed, removing cues");
-	}).observe(winTitle, { childList: true });
+		alert("Title changed, refreshed captions. Current track state: " + track?.mode);
+	}).observe(winTitle, { characterData: true });
 }
 
 setTimeout(() => {

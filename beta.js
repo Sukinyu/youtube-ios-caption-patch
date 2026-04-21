@@ -390,5 +390,6 @@ if (winTitle) {
 			track.mode = "hidden";
 			track.mode = "showing";
 		} // Refresh
-	}).observe(winTitle, { childList: true });
+		alert("Video changed");
+	}).observe(winTitle, { characterData: true });
 }
