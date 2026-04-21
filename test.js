@@ -380,6 +380,7 @@ const po = new PerformanceObserver((list) => {
 			}
 			try {
 				addCuesToTrack(track, json3);
+				alert(TrackEvent.cues.length + " captions loaded!");
 			} catch (err) {
 				console.error("Error adding captions:", err, "\n", err.stack);
 			}
