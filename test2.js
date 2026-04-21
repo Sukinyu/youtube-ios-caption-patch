@@ -6,6 +6,7 @@
 // @description  Fix captions on youtube videos in fullscreen mode on iOS (https://m.youtube.com/watch?). Injects a captions track with user-preferred language.
 // @match        https://m.youtube.com/watch?*
 // ==/UserScript==
+alert("[1] Script loaded.\nURL: " + location.href);
 
 const injectedUrls = new Set();
 const video = document.querySelector("video");
@@ -215,7 +216,7 @@ function addCuesToTrack(track, json) {
 
 	// Store pens globally for resize updates
 	currentPens = pens;
-
+	alert("[6] JSON parsed ✅\nevents: " + events.length + "\npens: " + pens.length + "\nwpWinPositions: " + wpWinPositions.length);
 	const videoRect = video.getBoundingClientRect();
 	const fs = calculateBaseFontSize(videoRect.width, videoRect.height);
 	updateCaptionStyles();
