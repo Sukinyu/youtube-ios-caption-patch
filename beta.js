@@ -12,6 +12,7 @@ const video = document.querySelector("video");
 const defaultFont =
 	'"YouTube Noto", Roboto, Arial, Helvetica, Verdana, "PT Sans Caption", sans-serif';
 let currentPens = [];
+const winTitle = document.querySelector("title");
 
 function calculateBaseFontSize(videoWidth, videoHeight) {
 	let baseSize = (videoHeight / 360) * 16;
@@ -64,10 +65,10 @@ function penToCss(pen) {
 	if (!pen) return "color: rgba(255,255,255,1);";
 
 	// Get video dimensions for font size calculation
-	const videoRect = video.getBoundingClientRect();
+	const videoRect = video?.getBoundingClientRect();
 
 	// Calculate base font percent (YouTube's N3e function)
-	let fs = calculateBaseFontSize(videoRect.width, videoRect.height);
+	let fs = calculateBaseFontSize(videoRect?.width, videoRect?.height);
 
 	// Font size multiplier (YouTube's SzJ function)
 	const fontSizeIncrement = pen.szPenSize ? pen.szPenSize / 100 - 1 : 0;
@@ -152,8 +153,8 @@ function setCaptionStyle(cssText) {
 function generatePenStyles() {
 	if (currentPens.length === 0) return null;
 
-	const vRect = video.getBoundingClientRect();
-	const fs = calculateBaseFontSize(vRect.width, vRect.height);
+	const vRect = video?.getBoundingClientRect();
+	const fs = calculateBaseFontSize(vRect?.width, vRect?.height);
 	let style = `::cue(c) { font-family: ${defaultFont}; font-size: ${fs}px; line-height: normal; }\n`;
 	style += `::cue(.bg) { background: rgba(0,0,0,0.5);}\n`;
 
@@ -225,8 +226,8 @@ function addCuesToTrack(track, json) {
 	// ---------- build cues array first ----------
 	for (const ev of events) {
 		if (!ev.segs || !ev.segs.length) continue; // Skip events without segments
-		const start = ts(ev.tStartMs);
-		const end = ts(ev.tStartMs + (ev.dDurationMs || 0));
+		const start = Number(ts(ev.tStartMs));
+		const end = Number(ts(ev.tStartMs + (ev.dDurationMs || 0)));
 		const parts = [];
 		ev.segs.forEach((seg) => {
 			if (!seg.utf8.length) return;
@@ -245,7 +246,7 @@ function addCuesToTrack(track, json) {
 		if (parts.length === 1 && parts[0] == "\n") continue; // Skip empty cues from auto-gen
 
 		parts.unshift(
-			`<c${parts.includes("</c>") ? ".bg" : ""}${ev.pPenId ? `.pen${ev.pPenId}` : ""}>`,
+			`<c${parts.includes("</c>") ? "" : ".bg"}${ev.pPenId ? `.pen${ev.pPenId}` : ""}>`,
 		);
 		parts.push("</c>");
 		let cueText = parts.join("");
@@ -327,15 +328,15 @@ const po = new PerformanceObserver((list) => {
 
 		function createTrack() {
 			let track =
-				video.textTracks &&
-				[...video.textTracks].find((t) => t.label.includes("Injected CC"));
+				video?.textTracks &&
+				[...video?.textTracks || []].find((t) => t.label.includes("Injected CC"));
 			if (!track) {
-				track = video.addTextTrack("captions", "Injected CC", userLang);
+				track = video?.addTextTrack("captions", "Injected CC", userLang);
 				track.mode = "showing";
 				console.log("Injected captions track");
 			} else {
 				if (track.cues) {
-					[...track.cues].forEach((cue) => track.removeCue(cue)); // Clear existing cues
+					[...track.cues].forEach((cue) => track?.removeCue(cue)); // Clear existing cues
 				}
 			}
 			if (translated) {
@@ -382,3 +383,10 @@ function updateCaptionStyles() {
 }
 
 window.onresize = () => updateCaptionStyles();
+
+if (winTitle) {
+  new MutationObserver(() => {
+		const track = video?.textTracks[0];
+		[...track?.cues || []].forEach((cue) => track?.removeCue(cue))
+  }).observe(winTitle, { childList: true });
+}
