@@ -7,8 +7,6 @@
 // @match        https://m.youtube.com/watch?*
 // ==/UserScript==
 
-alert("test")
-
 const injectedUrls = new Set();
 const video = document.querySelector("video");
 const defaultFont =
@@ -219,11 +217,9 @@ function addCuesToTrack(track, json) {
 	currentPens = pens;
 
 	const videoRect = video.getBoundingClientRect();
-	const videoWidth = videoRect.width;
-	const videoHeight = videoRect.height;
-	const fs = calculateBaseFontSize(videoWidth, videoHeight);
+	const fs = calculateBaseFontSize(videoRect.width, videoRect.height);
 	updateCaptionStyles();
-
+	alert(`Adding ${events.length} cues to track...`);
 	// ---------- build CSS from pens + positions ----------
 	const style = generatePenStyles();
 	if (style) setCaptionStyle(style);
