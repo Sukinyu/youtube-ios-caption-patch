@@ -189,7 +189,6 @@ function mapPosToCue(pos, pen, fs) {
 	}
 	let position = hor;
 	let align = null;
-	let positionAlign = null;
 
 	if (hasAnchor) {
 		switch (anchorPoint) {
@@ -215,7 +214,6 @@ function mapPosToCue(pos, pen, fs) {
 		line: ver,
 		position,
 		align,
-		positionAlign,
 	};
 }
 
@@ -283,7 +281,6 @@ function addCuesToTrack(track, json) {
 			cue.position = rd(placement.position, 2);
 		}
 		placement.align && (cue.align = placement.align);
-		placement.positionAlign && (cue.positionAlign = placement.positionAlign);
 
 		track.addCue(cue);
 	}
