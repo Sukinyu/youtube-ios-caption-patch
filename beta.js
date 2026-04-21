@@ -162,10 +162,11 @@ function generatePenStyles() {
 		if (!pen || Object.keys(pen).length === 0) continue;
 		style += `::cue(.pen${i}) { ${penToCss(pen)} }\n`;
 	}
+
 	return style;
 }
 
-function mapPosToCue(pos, pen, fs) {
+function mapPosToCue(pos, pen) {
 	if (!pos) return { line: 98, position: 21.5, size: 80, align: "left" };
 
 	const rawHor = pos.ahHorPos != null ? pos.ahHorPos : 50;
@@ -215,19 +216,8 @@ function addCuesToTrack(track, json) {
 	// Store pens globally for resize updates
 	currentPens = pens;
 
-	// ─── STEP 6: What's in the JSON? ─────────────────────────────────────────
-	alert(
-		"[6] JSON parsed ✅\nevents: " +
-			events.length +
-			"\npens: " +
-			pens.length +
-			"\nwpWinPositions: " +
-			wpWinPositions.length,
-	);
-	const videoRect = video.getBoundingClientRect();
-	const fs = calculateBaseFontSize(videoRect.width, videoRect.height);
 	updateCaptionStyles();
-
+	
 	// ---------- build CSS from pens + positions ----------
 	const style = generatePenStyles();
 	if (style) setCaptionStyle(style);
@@ -270,7 +260,7 @@ function addCuesToTrack(track, json) {
 
 		const pos = wpWinPositions[posId];
 		const eventPen = ev.pPenId != null ? pens[ev.pPenId] : null;
-		const placement = mapPosToCue(pos, eventPen, fs);
+		const placement = mapPosToCue(pos, eventPen);
 
 		placement.line && (cue.line = rd(placement.line, 2));
 		cue.lineAlign = placement.lineAlign;
@@ -278,7 +268,6 @@ function addCuesToTrack(track, json) {
 			cue.position = rd(placement.position, 2);
 		}
 		placement.align && (cue.align = placement.align);
-
 		track.addCue(cue);
 	}
 
@@ -295,12 +284,12 @@ function addCuesToTrack(track, json) {
 					const timestamp = `<${ts(cue2.startTime * 1000, true)}>`;
 					cue1.text += `\n${timestamp}${cue2.text}`;
 					cue2.startTime = cue1.endTime;
-					if (cue2.endtime == cue1.endTime) track.removeCue(cue2);
+					if (cue2.endTime == cue1.endTime) track.removeCue(cue2);
 				}
 			}
 		}
 	}
-	alert(`Added cues to track: ${track.cues ? track.cues.length : 0}`);
+	console.log(`Added cues to track: ${track.cues ? track.cues.length : 0}`);
 }
 
 const po = new PerformanceObserver((list) => {
@@ -337,26 +326,22 @@ const po = new PerformanceObserver((list) => {
 		const translated = newURL.searchParams.has("tlang");
 
 		function createTrack() {
-			try {
-				let track =
-					video.textTracks &&
-					[...video.textTracks].find((t) => t.label.includes("Injected CC"));
-				if (!track) {
-					track = video.addTextTrack("captions", "Injected CC", userLang);
-					track.mode = "showing";
-					console.log("Injected captions track");
-				} else {
-					if (track.cues) {
-						[...track.cues].forEach((cue) => track.removeCue(cue)); // Clear existing cues
-					}
+			let track =
+				video.textTracks &&
+				[...video.textTracks].find((t) => t.label.includes("Injected CC"));
+			if (!track) {
+				track = video.addTextTrack("captions", "Injected CC", userLang);
+				track.mode = "showing";
+				console.log("Injected captions track");
+			} else {
+				if (track.cues) {
+					[...track.cues].forEach((cue) => track.removeCue(cue)); // Clear existing cues
 				}
-				if (translated) {
-					track.label += " (TS)"; // short form of "Translated"
-				}
-				return track;
-			} catch (err) {
-				alert("Error creating track:", err, "\n", err.stack);
 			}
+			if (translated) {
+				track.label += " (TS)"; // short form of "Translated"
+			}
+			return track;
 		}
 
 		const tryFetch = (returnFormat) => {
@@ -369,7 +354,7 @@ const po = new PerformanceObserver((list) => {
 		};
 		tryFetch("json3").then((json) => {
 			let json3;
-			track = createTrack();
+			let track = createTrack();
 			try {
 				json3 = JSON.parse(json);
 			} catch {
@@ -382,7 +367,7 @@ const po = new PerformanceObserver((list) => {
 			try {
 				addCuesToTrack(track, json3);
 			} catch (err) {
-				alert("Error adding captions:", err, "\n", err.stack);
+				alert("Error adding captions:" + err + "\n" + err.stack);
 			}
 		});
 	}
@@ -396,4 +381,4 @@ function updateCaptionStyles() {
 	if (style) setCaptionStyle(style);
 }
 
-window.addEventListener("resize", updateCaptionStyles);
+window.onresize = () => updateCaptionStyles();
