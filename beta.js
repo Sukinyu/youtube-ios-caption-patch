@@ -354,7 +354,6 @@ const po = new PerformanceObserver((list) => {
 					track.label += " (TS)"; // short form of "Translated"
 				}
 				return track;
-				alert(track?.cues);
 			} catch (err) {
 				alert("Error creating track:", err, "\n", err.stack);
 			}
