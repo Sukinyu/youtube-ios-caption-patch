@@ -167,7 +167,7 @@ function generatePenStyles() {
 }
 
 function mapPosToCue(pos, pen) {
-	if (!pos) return { line: 98, position: 46.4, align: "left" };
+	if (!pos) return { line: 98, position: 46.4, align: "start" };
 
 	const rawHor = pos.ahHorPos != null ? pos.ahHorPos : 50;
 	let rawVer = pos.avVerPos != null ? pos.avVerPos : 100;
@@ -378,10 +378,6 @@ function updateCaptionStyles() {
 	// Regenerate pen styles on resize to reflect new video dimensions
 	const style = generatePenStyles();
 	if (style) setCaptionStyle(style);
-	const track = video?.textTracks[0];
-	if (track?.mode === "showing") {
-		track.mode = 'showing';
-	}
 }
 
 window.onresize = () => updateCaptionStyles();
