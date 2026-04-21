@@ -344,8 +344,8 @@ const po = new PerformanceObserver((list) => {
 			if (translated) {
 				track.label += " (TS)"; // short form of "Translated"
 			}
-			return track;
 			alert(track?.cues)
+			return track;
 		}
 
 		const tryFetch = (returnFormat) => {
@@ -367,9 +367,11 @@ const po = new PerformanceObserver((list) => {
 					return `"utf8": "${fixed}"`;
 				});
 				json3 = JSON.parse(json);
+				alert(json3 ? "Parsed JSON after fixing newlines" : "Failed to parse JSON even after fixing");
 			}
 			try {
 				addCuesToTrack(track, json3);
+				alert(`Captions added to track: ${track.cues ? track.cues.length : 0}`);
 			} catch (err) {
 				alert("Error adding captions:", err, "\n", err.stack);
 			}
