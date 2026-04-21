@@ -301,7 +301,7 @@ function addCuesToTrack(track, json) {
 	}
 	alert(`Added cues to track: ${track.cues ? track.cues.length : 0}`);
 }
-
+alert("Initializing caption observer...");
 const po = new PerformanceObserver((list) => {
 	for (const entry of list.getEntries()) {
 		const url = entry.name;
