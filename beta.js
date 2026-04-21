@@ -151,7 +151,7 @@ function setCaptionStyle(cssText) {
 
 function generatePenStyles() {
 	if (currentPens.length === 0) return null;
-	
+
 	const vRect = video.getBoundingClientRect();
 	const fs = calculateBaseFontSize(vRect.width, vRect.height);
 	let style = `::cue(c) { font-family: ${defaultFont}; font-size: ${fs}px; line-height: normal; }\n`;
@@ -347,6 +347,7 @@ const po = new PerformanceObserver((list) => {
 				track.label += " (TS)"; // short form of "Translated"
 			}
 			return track;
+			alert(track?.cues)
 		}
 
 		const tryFetch = (returnFormat) => {
