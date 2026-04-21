@@ -167,7 +167,7 @@ function generatePenStyles() {
 }
 
 function mapPosToCue(pos, pen) {
-	if (!pos) return { line: 98, position: 46.4, align: "start" };
+	if (!pos) return { line: 98, position: 46.4, align: "left" };
 
 	const rawHor = pos.ahHorPos != null ? pos.ahHorPos : 50;
 	let rawVer = pos.avVerPos != null ? pos.avVerPos : 100;

@@ -379,9 +379,7 @@ function updateCaptionStyles() {
 	const style = generatePenStyles();
 	if (style) setCaptionStyle(style);
 	const track = video?.textTracks[0];
-	if (track?.mode === "showing") {
-		track.mode = 'showing';
-	}
+	alert("active: " + (track.activeCues?.length ?? 0));
 }
 
 window.onresize = () => updateCaptionStyles();
@@ -396,3 +394,13 @@ if (winTitle) {
 		} // Refresh
 	}).observe(winTitle, { childList: true });
 }
+
+setTimeout(() => {
+	const track = video?.textTracks[0];
+  alert(
+    "TRACK CHECK\n" +
+    "mode: " + track.mode + "\n" +
+    "cues: " + track.cues.length + "\n" +
+    "active: " + (track.activeCues?.length ?? 0)
+  );
+}, 2000);
