@@ -301,7 +301,7 @@ const po = new PerformanceObserver((list) => {
 		if (!url.includes("/api/timedtext") || injectedUrls.has(url)) continue;
 		injectedUrls.add(url);
 
-		console.log("Caption request detected:", url);
+		alert("Caption request detected:", url);
 		let newURL = new URL(url);
 		const removeParams = [
 			"potc",
