@@ -6,7 +6,6 @@
 // @description  Fix captions on youtube videos in fullscreen mode on iOS (https://m.youtube.com/watch?). Injects a captions track with user-preferred language.
 // @match        https://m.youtube.com/watch?*
 // ==/UserScript==
-alert("[1] Script loaded.\nURL: " + location.href);
 
 const injectedUrls = new Set();
 const video = document.querySelector("video");
