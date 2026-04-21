@@ -154,9 +154,8 @@ function generatePenStyles() {
 
 	const vRect = video.getBoundingClientRect();
 	const fs = calculateBaseFontSize(vRect.width, vRect.height);
-	let style = `::cue(v) { font-family: ${defaultFont}; font-size: ${fs}px; line-height: normal; }\n`;
-	style += `::cue(v.bg) { background: rgba(0,0,0,0.5);}\n`;
-	style += `::cue(c) { font-family: ${defaultFont}; font-size: ${fs}px; line-height: normal; }\n`;
+	let style = `::cue(c) { font-family: ${defaultFont}; font-size: ${fs}px; line-height: normal; }\n`;
+	style += `::cue(.bg) { background: rgba(0,0,0,0.5);}\n`;
 
 	for (let i = 0; i < currentPens.length; i++) {
 		const pen = currentPens[i];
@@ -206,11 +205,7 @@ function mapPosToCue(pos, pen, fs) {
 		}
 	}
 
-	return {
-		line: ver,
-		position,
-		align,
-	};
+	return { line: ver, position, align };
 }
 
 function addCuesToTrack(track, json) {
@@ -222,15 +217,13 @@ function addCuesToTrack(track, json) {
 	currentPens = pens;
 
 	const videoRect = video.getBoundingClientRect();
-	const videoWidth = videoRect.width;
-	const videoHeight = videoRect.height;
-	const fs = calculateBaseFontSize(videoWidth, videoHeight);
+	const fs = calculateBaseFontSize(videoRect.width, videoRect.height);
 	updateCaptionStyles();
-
+	alert(`Adding ${events.length} cues to track...`);
 	// ---------- build CSS from pens + positions ----------
 	const style = generatePenStyles();
 	if (style) setCaptionStyle(style);
-	alert(json.events ? `Processing ${json.events.length} caption events...` : "No caption events found in JSON.");
+
 	// ---------- build cues array first ----------
 	for (const ev of events) {
 		if (!ev.segs || !ev.segs.length) continue; // Skip events without segments
@@ -301,7 +294,7 @@ function addCuesToTrack(track, json) {
 	}
 	alert(`Added cues to track: ${track.cues ? track.cues.length : 0}`);
 }
-alert("Initializing caption observer...");
+
 const po = new PerformanceObserver((list) => {
 	for (const entry of list.getEntries()) {
 		const url = entry.name;
@@ -352,6 +345,7 @@ const po = new PerformanceObserver((list) => {
 				track.label += " (TS)"; // short form of "Translated"
 			}
 			return track;
+			alert(track?.cues)
 		}
 
 		const tryFetch = (returnFormat) => {
