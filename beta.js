@@ -65,11 +65,9 @@ function penToCss(pen) {
 
 	// Get video dimensions for font size calculation
 	const videoRect = video.getBoundingClientRect();
-	const videoWidth = videoRect.width;
-	const videoHeight = videoRect.height;
 
 	// Calculate base font percent (YouTube's N3e function)
-	let fs = calculateBaseFontSize(videoWidth, videoHeight);
+	let fs = calculateBaseFontSize(videoRect.width, videoRect.height);
 
 	// Font size multiplier (YouTube's SzJ function)
 	const fontSizeIncrement = pen.szPenSize ? pen.szPenSize / 100 - 1 : 0;
