@@ -167,7 +167,7 @@ function generatePenStyles() {
 }
 
 function mapPosToCue(pos, pen) {
-	if (!pos) return { line: 98, position: 46.4, size: 80, align: "left" };
+	if (!pos) return { line: 98, position: 46.4, align: "left" };
 
 	const rawHor = pos.ahHorPos != null ? pos.ahHorPos : 50;
 	let rawVer = pos.avVerPos != null ? pos.avVerPos : 100;
@@ -217,7 +217,7 @@ function addCuesToTrack(track, json) {
 	currentPens = pens;
 
 	updateCaptionStyles();
-	
+
 	// ---------- build CSS from pens + positions ----------
 	const style = generatePenStyles();
 	if (style) setCaptionStyle(style);
@@ -238,15 +238,15 @@ function addCuesToTrack(track, json) {
 			let text = seg.utf8;
 			if (seg.pPenId != null) {
 				text = `<c.pen${seg.pPenId}>${text}</c>`;
+			} else {
+				text = `<c.bg>${text}</c>`;
 			}
 			parts.push(text);
 		});
 
 		if (parts.length === 1 && parts[0] == "\n") continue; // Skip empty cues from auto-gen
 
-		parts.unshift(
-			`<c${parts.includes("</c>") ? "" : ".bg"}${ev.pPenId ? `.pen${ev.pPenId}` : ""}>`,
-		);
+		parts.unshift(`<c${ev.pPenId ? `.pen${ev.pPenId}` : ""}>`);
 		parts.push("</c>");
 		let cueText = parts.join("");
 		let cue = new VTTCue(start, end, cueText);
@@ -328,7 +328,9 @@ const po = new PerformanceObserver((list) => {
 		function createTrack() {
 			let track =
 				video?.textTracks &&
-				[...video?.textTracks || []].find((t) => t.label.includes("Injected CC"));
+				[...(video?.textTracks || [])].find((t) =>
+					t.label.includes("Injected CC"),
+				);
 			if (!track) {
 				track = video?.addTextTrack("captions", "Injected CC", userLang);
 				track.mode = "showing";
@@ -384,8 +386,12 @@ function updateCaptionStyles() {
 window.onresize = () => updateCaptionStyles();
 
 if (winTitle) {
-  new MutationObserver(() => {
+	new MutationObserver(() => {
 		const track = video?.textTracks[0];
-		[...track?.cues || []].forEach((cue) => track?.removeCue(cue))
-  }).observe(winTitle, { childList: true });
+		[...(track?.cues || [])].forEach((cue) => track?.removeCue(cue));
+		if (track?.mode === "showing") {
+			track.mode = "hidden";
+			track.mode = "showing";
+		} // Refresh
+	}).observe(winTitle, { childList: true });
 }
