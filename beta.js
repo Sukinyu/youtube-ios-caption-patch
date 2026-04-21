@@ -366,41 +366,6 @@ const po = new PerformanceObserver((list) => {
 				return r.text();
 			});
 		};
-		/*
-		// Try JSON3 first, fallback to VTT
-		tryFetch("json3")
-			.then((json) => {
-				let json3;
-				try {
-					json3 = JSON.parse(json);
-				} catch {
-					json = json.replace(/"utf8":\s*"([\s\S]*?)"/g, (match, content) => {
-						const fixed = content.replace(/\n/g, "\\n"); // Fix newlines
-						return `"utf8": "${fixed}"`;
-					});
-					json3 = JSON.parse(json);
-				}
-				const blobUrl = URL.createObjectURL(
-					new Blob([json3ToVtt(json3)], { type: "text/vtt" }),
-				);
-				createTrack(blobUrl);
-			})
-			.catch((err) => {
-				alert(err.message + "\nFalling back to VTT format.");
-				tryFetch("vtt").then((vttText) => {
-					// Modify VTT content
-					const modified = vttText
-						.replace(/Style:/g, "STYLE")
-						.replace(/##/g, "");
-
-					const blobUrl = URL.createObjectURL(
-						new Blob([modified], { type: "text/vtt" }),
-					);
-					createTrack(blobUrl);
-				});
-			});
-*/
-
 		tryFetch("json3").then((json) => {
 			let json3;
 			track = createTrack();
