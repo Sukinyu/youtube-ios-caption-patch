@@ -227,7 +227,7 @@ function addCuesToTrack(track, json) {
 	const videoRect = video.getBoundingClientRect();
 	const fs = calculateBaseFontSize(videoRect.width, videoRect.height);
 	updateCaptionStyles();
-	
+
 	// ---------- build CSS from pens + positions ----------
 	const style = generatePenStyles();
 	if (style) setCaptionStyle(style);
@@ -337,23 +337,27 @@ const po = new PerformanceObserver((list) => {
 		const translated = newURL.searchParams.has("tlang");
 
 		function createTrack() {
-			let track =
-				video.textTracks &&
-				[...video.textTracks].find((t) => t.label.includes("Injected CC"));
-			if (!track) {
-				track = video.addTextTrack("captions", "Injected CC", userLang);
-				track.mode = "showing";
-				console.log("Injected captions track");
-			} else {
-				if (track.cues) {
-					[...track.cues].forEach((cue) => track.removeCue(cue)); // Clear existing cues
+			try {
+				let track =
+					video.textTracks &&
+					[...video.textTracks].find((t) => t.label.includes("Injected CC"));
+				if (!track) {
+					track = video.addTextTrack("captions", "Injected CC", userLang);
+					track.mode = "showing";
+					console.log("Injected captions track");
+				} else {
+					if (track.cues) {
+						[...track.cues].forEach((cue) => track.removeCue(cue)); // Clear existing cues
+					}
 				}
+				if (translated) {
+					track.label += " (TS)"; // short form of "Translated"
+				}
+				return track;
+				alert(track?.cues);
+			} catch (err) {
+				alert("Error creating track:", err, "\n", err.stack);
 			}
-			if (translated) {
-				track.label += " (TS)"; // short form of "Translated"
-			}
-			return track;
-			alert(track?.cues)
 		}
 
 		const tryFetch = (returnFormat) => {
