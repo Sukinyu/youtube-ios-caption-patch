@@ -329,10 +329,6 @@ const po = new PerformanceObserver((list) => {
 			// ─── STEP 5: Can we add a text track? ────────────────────────────
 			let track;
 			try {
-				if (!video) {
-					alert("[5] ❌ video is still null — cannot add track!");
-					return;
-				}
 				track =
 					video.textTracks &&
 					[...video.textTracks].find((t) => t.label.includes("Injected CC"));

@@ -287,7 +287,6 @@ function addCuesToTrack(track, json) {
 			}
 		}
 	}
-	alert(`Added cues to track: ${track.cues ? track.cues.length : 0}`);
 }
 
 const po = new PerformanceObserver((list) => {
@@ -379,6 +378,10 @@ function updateCaptionStyles() {
 	// Regenerate pen styles on resize to reflect new video dimensions
 	const style = generatePenStyles();
 	if (style) setCaptionStyle(style);
+	const track = video?.textTracks[0];
+	if (track?.mode === "showing") {
+		alert("track");
+	}
 }
 
 window.onresize = () => updateCaptionStyles();
