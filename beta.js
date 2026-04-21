@@ -163,12 +163,11 @@ function generatePenStyles() {
 		if (!pen || Object.keys(pen).length === 0) continue;
 		style += `::cue(.pen${i}) { ${penToCss(pen)} }\n`;
 	}
-
 	return style;
 }
 
 function mapPosToCue(pos, pen) {
-	if (!pos) return { line: 98, position: 21.5, size: 80, align: "left" };
+	if (!pos) return { line: 98, position: 46.4, size: 80, align: "left" };
 
 	const rawHor = pos.ahHorPos != null ? pos.ahHorPos : 50;
 	let rawVer = pos.avVerPos != null ? pos.avVerPos : 100;
