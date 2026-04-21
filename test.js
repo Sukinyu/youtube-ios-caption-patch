@@ -267,6 +267,7 @@ function addCuesToTrack(track, json) {
 		}
 		placement.align && (cue.align = placement.align);
 		track.addCue(cue);
+		alert(cue);
 	}
 
 	// ---------- detect overlapping cues, merge left-align lines, and set snapToLines ----------
@@ -378,8 +379,6 @@ function updateCaptionStyles() {
 	// Regenerate pen styles on resize to reflect new video dimensions
 	const style = generatePenStyles();
 	if (style) setCaptionStyle(style);
-	const track = video?.textTracks[0];
-	alert("active: " + (track.activeCues?.length ?? 0));
 }
 
 window.onresize = () => updateCaptionStyles();
@@ -392,6 +391,7 @@ if (winTitle) {
 			track.mode = "hidden";
 			track.mode = "showing";
 		} // Refresh
+		alert("Title changed, removing cues");
 	}).observe(winTitle, { childList: true });
 }
 
@@ -403,4 +403,4 @@ setTimeout(() => {
     "cues: " + track.cues.length + "\n" +
     "active: " + (track.activeCues?.length ?? 0)
   );
-}, 2000);
+}, 4000);
