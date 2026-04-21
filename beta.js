@@ -7,6 +7,8 @@
 // @match        https://m.youtube.com/watch?*
 // ==/UserScript==
 
+alert("test")
+
 const injectedUrls = new Set();
 const video = document.querySelector("video");
 const defaultFont =
