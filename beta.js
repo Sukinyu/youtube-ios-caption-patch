@@ -151,12 +151,11 @@ function setCaptionStyle(cssText) {
 
 function generatePenStyles() {
 	if (currentPens.length === 0) return null;
-
+	
 	const vRect = video.getBoundingClientRect();
 	const fs = calculateBaseFontSize(vRect.width, vRect.height);
-	let style = `::cue(v) { font-family: ${defaultFont}; font-size: ${fs}px; line-height: normal; }\n`;
-	style += `::cue(v.bg) { background: rgba(0,0,0,0.5);}\n`;
-	style += `::cue(c) { font-family: ${defaultFont}; font-size: ${fs}px; line-height: normal; }\n`;
+	let style = `::cue(c) { font-family: ${defaultFont}; font-size: ${fs}px; line-height: normal; }\n`;
+	style += `::cue(.bg) { background: rgba(0,0,0,0.5);}\n`;
 
 	for (let i = 0; i < currentPens.length; i++) {
 		const pen = currentPens[i];
@@ -206,11 +205,7 @@ function mapPosToCue(pos, pen, fs) {
 		}
 	}
 
-	return {
-		line: ver,
-		position,
-		align,
-	};
+	return { line: ver, position, align };
 }
 
 function addCuesToTrack(track, json) {
