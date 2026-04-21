@@ -162,7 +162,6 @@ function generatePenStyles() {
 		if (!pen || Object.keys(pen).length === 0) continue;
 		style += `::cue(.pen${i}) { ${penToCss(pen)} }\n`;
 	}
-
 	return style;
 }
 
@@ -216,10 +215,19 @@ function addCuesToTrack(track, json) {
 	// Store pens globally for resize updates
 	currentPens = pens;
 
+	// ─── STEP 6: What's in the JSON? ─────────────────────────────────────────
+	alert(
+		"[6] JSON parsed ✅\nevents: " +
+			events.length +
+			"\npens: " +
+			pens.length +
+			"\nwpWinPositions: " +
+			wpWinPositions.length,
+	);
 	const videoRect = video.getBoundingClientRect();
 	const fs = calculateBaseFontSize(videoRect.width, videoRect.height);
 	updateCaptionStyles();
-	alert(`Adding ${events.length} cues to track...`);
+	
 	// ---------- build CSS from pens + positions ----------
 	const style = generatePenStyles();
 	if (style) setCaptionStyle(style);
