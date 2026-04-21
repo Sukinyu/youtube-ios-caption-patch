@@ -98,8 +98,12 @@ function penToCss(pen) {
 		let darkShadow = eC ?? `rgba(34, 34, 34, ${foreAlpha})`;
 		let lightShadow = eC ?? `rgba(204, 204, 204, ${foreAlpha})`;
 		switch (edgeType) {
-			case 1: // Uniform raised
-				textShadow += `${K}px ${K}px ${darkShadow}, ${K + 1}px ${K + 1}px ${darkShadow}, ${K + 2}px ${K + 2}px ${darkShadow}`;
+			case 1:  // Uniform raised
+				const step = window.devicePixelRatio >= 2 ? 0.5 : 1;
+				textShadow += Array.from(
+					{ length: Math.ceil((w - K) / step) + 1 },
+					(_, i) => `${K + i * step}px ${K + i * step}px ${darkShadow}`,
+				).join(", ");
 				break;
 			case 2: // 3D raised
 				textShadow += `${K}px ${K}px ${lightShadow}, -${K}px -${K}px ${darkShadow}`;
