@@ -79,10 +79,7 @@ function penToCss(pen) {
 	const c = rgb(pen.fcForeColor ?? 0xffffff);
 	const foreAlpha = rd(pen.foForeAlpha != null ? pen.foForeAlpha / 255 : 1);
 	const cB = rgb(pen.bcBackColor ?? 0);
-	const backAlpha = rd(
-		pen.boBackAlpha != null ? pen.boBackAlpha / 255 : 0.5,
-		4,
-	);
+	const backAlpha = rd(pen.boBackAlpha != null ? pen.boBackAlpha / 255 : 0.5);
 
 	// Edge effects
 	const edgeType = pen.etEdgeType ?? 0;
@@ -93,12 +90,11 @@ function penToCss(pen) {
 		const K = rd(Math.max(scale, 1));
 		const v = rd(Math.max(scale * 2, 1));
 		const w = rd(Math.max(scale * 3, 1));
-
 		let eC = pen.ecEdgeColor != null ? `rgb(${rgb(pen.ecEdgeColor)})` : null;
 		let darkShadow = eC ?? `rgba(34, 34, 34, ${foreAlpha})`;
 		let lightShadow = eC ?? `rgba(204, 204, 204, ${foreAlpha})`;
 		switch (edgeType) {
-			case 1:  // Uniform raised
+			case 1: // Uniform raised
 				const step = window.devicePixelRatio >= 2 ? 0.5 : 1;
 				textShadow += Array.from(
 					{ length: Math.ceil((w - K) / step) + 1 },
@@ -234,7 +230,7 @@ function addCuesToTrack(track, json) {
 	// ---------- build CSS from pens + positions ----------
 	const style = generatePenStyles();
 	if (style) setCaptionStyle(style);
-
+	alert(json.events ? `Processing ${json.events.length} caption events...` : "No caption events found in JSON.");
 	// ---------- build cues array first ----------
 	for (const ev of events) {
 		if (!ev.segs || !ev.segs.length) continue; // Skip events without segments
@@ -303,7 +299,7 @@ function addCuesToTrack(track, json) {
 			}
 		}
 	}
-	console.log(`Added cues to track: ${track.cues ? track.cues.length : 0}`);
+	alert(`Added cues to track: ${track.cues ? track.cues.length : 0}`);
 }
 
 const po = new PerformanceObserver((list) => {
