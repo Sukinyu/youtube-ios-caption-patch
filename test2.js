@@ -344,7 +344,7 @@ const po = new PerformanceObserver((list) => {
 			if (translated) {
 				track.label += " (TS)"; // short form of "Translated"
 			}
-			alert(track?.cues)
+			alert("cues:", [...track?.cues]);
 			return track;
 		}
 
