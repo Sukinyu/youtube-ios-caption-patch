@@ -303,7 +303,7 @@ function addCuesToTrack(track, json) {
 			}
 		}
 	}
-	console.log(`Added cues to track: ${track.cues ? track.cues.length : 0}`);
+	alert(`Added cues to track: ${track.cues ? track.cues.length : 0}`);
 }
 
 const po = new PerformanceObserver((list) => {
@@ -381,7 +381,7 @@ const po = new PerformanceObserver((list) => {
 			try {
 				addCuesToTrack(track, json3);
 			} catch (err) {
-				console.error("Error adding captions:", err, "\n", err.stack);
+				alert("Error adding captions:", err, "\n", err.stack);
 			}
 		});
 	}

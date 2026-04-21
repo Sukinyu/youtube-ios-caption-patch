@@ -381,7 +381,7 @@ const po = new PerformanceObserver((list) => {
 			try {
 				addCuesToTrack(track, json3);
 			} catch (err) {
-				console.error("Error adding captions:", err, "\n", err.stack);
+				alert("Error adding captions:", err, "\n", err.stack);
 			}
 		});
 	}
