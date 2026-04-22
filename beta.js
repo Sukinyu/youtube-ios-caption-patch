@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Fix MWeb Youtube Fullscreen Captions
 // @author       Sukinyu
-// @version      0.3.45
+// @version      0.3.48
 // @last         4/21/2026 (mm/dd/yyyy)
 // @description  Fix captions on youtube videos in fullscreen mode on iOS (https://m.youtube.com/watch?). Injects a captions track with user-preferred language.
 // @match        https://m.youtube.com/watch?*
@@ -12,7 +12,6 @@ const video = document.querySelector("video");
 const defaultFont =
 	'"YouTube Noto", Roboto, Arial, Helvetica, Verdana, "PT Sans Caption", sans-serif';
 let currentPens = [];
-const winTitle = document.querySelector("title");
 
 function calculateBaseFontSize(videoWidth, videoHeight) {
 	let baseSize = (videoHeight / 360) * 16;
@@ -106,7 +105,7 @@ function penToCss(pen) {
 				textShadow += `${K}px ${K}px ${lightShadow}, -${K}px -${K}px ${darkShadow}`;
 				break;
 			case 3: // Glow (most common)
-				textShadow += Array(5).fill(`0 0 ${v}px ${darkShadow}`).join(", ");
+				textShadow += Array(6).fill(`0 0 ${v}px ${darkShadow}`).join(", ");
 				break;
 			case 4: // Blur effect
 				const shadows = [];
@@ -241,16 +240,12 @@ function addCuesToTrack(track, json) {
 				parts.push(`<${ts(ev.tStartMs + seg.tOffsetMs, true)}>`); // Karaoke timing
 			}
 
-			let text = seg.utf8;
-			if (seg.pPenId != null) {
-				text = `<c.pen${seg.pPenId}>${text}</c>`;
-			} else {
-				text = `<c.bg>${text}</c>`;
-			}
-			parts.push(text);
+			parts.push(seg.pPenId != null ? `<c.pen${seg.pPenId}>` : `<c.bg>`);
+			parts.push(seg.utf8);
+			parts.push("</c>");
 		});
 
-		if (parts.length === 1 && parts[0] == "\n") continue; // Skip empty cues from auto-gen
+		if (parts.length === 3 && parts[1] == "\n") continue; // Skip empty cues from auto-gen
 
 		parts.unshift(`<c${ev.pPenId ? `.pen${ev.pPenId}` : ""}>`);
 		parts.push("</c>");
@@ -275,7 +270,7 @@ function addCuesToTrack(track, json) {
 		placement.positionAlign && (cue.positionAlign = placement.positionAlign);
 
 		// When creating each cue in the loop, tag them if needed:
-		cue._winId = ev.wpWinPosId ?? -1;
+		cue.id = ev.wpWinPosId ?? 0;
 
 		track.addCue(cue);
 	}
@@ -292,7 +287,7 @@ function addCuesToTrack(track, json) {
 			if (overlapStart >= overlapEnd) continue; // no overlap
 
 			// Different window IDs = intentionally simultaneous, leave alone
-			if (c1._winId !== c2._winId) continue;
+			if (c1.id !== c2.id) continue;
 
 			// Combined cue for the overlapping period
 			const merged = new VTTCue(
@@ -385,6 +380,7 @@ const po = new PerformanceObserver((list) => {
 				return r.text();
 			});
 		};
+		if (video.fullscr)
 		tryFetch("json3").then((json) => {
 			let json3;
 			let track = createTrack();
@@ -416,14 +412,13 @@ function updateCaptionStyles() {
 
 window.onresize = () => updateCaptionStyles();
 
-if (winTitle) {
+if (video.src) {
 	new MutationObserver(() => {
 		const track = video?.textTracks[0];
-		[...(track?.cues || [])].forEach((cue) => track?.removeCue(cue));
+		[...(track.cues)].forEach((cue) => track?.removeCue(cue));
 		if (track?.mode === "showing") {
 			track.mode = "hidden";
 			track.mode = "showing";
 		} // Refresh
-		alert("Video changed");
-	}).observe(winTitle, { characterData: true });
+	}).observe(video, { attributeFilter: ["src"] });
 }
