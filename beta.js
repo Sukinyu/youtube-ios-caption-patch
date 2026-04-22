@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Fix MWeb Youtube Fullscreen Captions
 // @author       Sukinyu
-// @version      0.3.43
+// @version      0.3.45
 // @last         4/21/2026 (mm/dd/yyyy)
 // @description  Fix captions on youtube videos in fullscreen mode on iOS (https://m.youtube.com/watch?). Injects a captions track with user-preferred language.
 // @match        https://m.youtube.com/watch?*
@@ -191,7 +191,7 @@ function mapPosToCue(pos, pen) {
 			case 0:
 			case 3:
 			case 6:
-				align = positionAlign= "left";
+				align = positionAlign = "left";
 				break;
 			case 2:
 			case 5:
@@ -206,7 +206,12 @@ function mapPosToCue(pos, pen) {
 		}
 	}
 
-	return { line: ver, position: position, align:align, positionAlign: positionAlign };
+	return {
+		line: ver,
+		position: position,
+		align: align,
+		positionAlign: positionAlign,
+	};
 }
 
 function addCuesToTrack(track, json) {
@@ -268,24 +273,51 @@ function addCuesToTrack(track, json) {
 		}
 		placement.align && (cue.align = placement.align);
 		placement.positionAlign && (cue.positionAlign = placement.positionAlign);
+
+		// When creating each cue in the loop, tag them if needed:
+		cue._winId = ev.wpWinPosId ?? -1;
+
 		track.addCue(cue);
 	}
 
 	// ---------- detect overlapping cues, merge left-align lines, and set snapToLines ----------
-	for (let i = 0; i < track.cues.length; i++) {
-		for (let j = i + 1; j < Math.min(i + 3, track.cues.length); j++) {
-			const cue1 = track.cues[i];
-			const cue2 = track.cues[j];
-			// Check if time ranges overlap
-			if (cue1.endTime > cue2.startTime && cue1.startTime <= cue2.endTime) {
-				// If both cues are left-aligned, append the next cue text into the first cue
-				// using an in-cue timestamp tag, then delay the second cue start to the end of the first.
-				if (cue1.align === "left" && cue2.align === "left") {
-					const timestamp = `<${ts(cue2.startTime * 1000, true)}>`;
-					cue1.text += `\n${timestamp}${cue2.text}`;
-					cue2.startTime = cue1.endTime;
-					if (cue2.endTime == cue1.endTime) track.removeCue(cue2);
-				}
+	const cues = [...track.cues];
+	for (let i = 0; i < cues.length; i++) {
+		for (let j = i + 1; j < cues.length; j++) {
+			const c1 = cues[i];
+			const c2 = cues[j];
+
+			const overlapStart = Math.max(c1.startTime, c2.startTime);
+			const overlapEnd = Math.min(c1.endTime, c2.endTime);
+			if (overlapStart >= overlapEnd) continue; // no overlap
+
+			// Different window IDs = intentionally simultaneous, leave alone
+			if (c1._winId !== c2._winId) continue;
+
+			// Combined cue for the overlapping period
+			const merged = new VTTCue(
+				overlapStart,
+				overlapEnd,
+				c1.text + "\n" + c2.text,
+			);
+			merged.snapToLines = c1.snapToLines;
+			merged.line = c1.line;
+			merged.position = c1.position;
+			merged.align = c1.align;
+			track.addCue(merged);
+
+			// Trim c1 — remove if it has no solo time left
+			if (c1.startTime < overlapStart) {
+				c1.endTime = overlapStart;
+			} else {
+				track.removeCue(c1);
+			}
+
+			// Trim c2 — remove if it has no solo time left
+			if (c2.endTime > overlapEnd) {
+				c2.startTime = overlapEnd;
+			} else {
+				track.removeCue(c2);
 			}
 		}
 	}
