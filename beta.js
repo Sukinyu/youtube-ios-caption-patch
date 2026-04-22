@@ -183,19 +183,20 @@ function mapPosToCue(pos, pen) {
 		console.log("Adjusted hor for left anchor:", hor);
 	}
 	let position = hor;
-	let align = null;
+	let align = undefined;
+	let positionAlign = undefined;
 
 	if (hasAnchor) {
 		switch (anchorPoint) {
 			case 0:
 			case 3:
 			case 6:
-				align = "left";
+				align = positionAlign= "left";
 				break;
 			case 2:
 			case 5:
 			case 8:
-				align = "right";
+				align = positionAlign = "right";
 				break;
 			case 1:
 			case 4:
@@ -205,7 +206,7 @@ function mapPosToCue(pos, pen) {
 		}
 	}
 
-	return { line: ver, position, align };
+	return { line: ver, position: position, align:align, positionAlign: positionAlign };
 }
 
 function addCuesToTrack(track, json) {
@@ -266,6 +267,7 @@ function addCuesToTrack(track, json) {
 			cue.position = rd(placement.position, 2);
 		}
 		placement.align && (cue.align = placement.align);
+		placement.positionAlign && (cue.positionAlign = placement.positionAlign);
 		track.addCue(cue);
 	}
 
