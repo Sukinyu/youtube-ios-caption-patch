@@ -269,9 +269,6 @@ function addCuesToTrack(track, json, stackProcess) {
 		placement.align && (cue.align = placement.align);
 		placement.positionAlign && (cue.positionAlign = placement.positionAlign);
 
-		// When creating each cue in the loop, tag them if needed:
-		cue.id = ev.wpWinPosId ?? 0;
-
 		track.addCue(cue);
 	}
 	if (!stackProcess) return;
@@ -285,9 +282,6 @@ function addCuesToTrack(track, json, stackProcess) {
 			const overlapStart = Math.max(c1.startTime, c2.startTime);
 			const overlapEnd = Math.min(c1.endTime, c2.endTime);
 			if (overlapStart >= overlapEnd) continue; // no overlap
-
-			// Different window IDs = intentionally simultaneous, leave alone
-			if (c1.id !== c2.id) continue;
 
 			// Combined cue for the overlapping period
 			const merged = new VTTCue(
