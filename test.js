@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Fix MWeb Youtube Fullscreen Captions
 // @author       Sukinyu
-// @version      0.3.43
+// @version      0.3.50
 // @last         4/21/2026 (mm/dd/yyyy)
 // @description  Fix captions on youtube videos in fullscreen mode on iOS (https://m.youtube.com/watch?). Injects a captions track with user-preferred language.
 // @match        https://m.youtube.com/watch?*
@@ -12,7 +12,6 @@ const video = document.querySelector("video");
 const defaultFont =
 	'"YouTube Noto", Roboto, Arial, Helvetica, Verdana, "PT Sans Caption", sans-serif';
 let currentPens = [];
-const winTitle = document.querySelector("title");
 
 function calculateBaseFontSize(videoWidth, videoHeight) {
 	let baseSize = (videoHeight / 360) * 16;
@@ -106,7 +105,7 @@ function penToCss(pen) {
 				textShadow += `${K}px ${K}px ${lightShadow}, -${K}px -${K}px ${darkShadow}`;
 				break;
 			case 3: // Glow (most common)
-				textShadow += Array(5).fill(`0 0 ${v}px ${darkShadow}`).join(", ");
+				textShadow += Array(6).fill(`0 0 ${v}px ${darkShadow}`).join(", ");
 				break;
 			case 4: // Blur effect
 				const shadows = [];
@@ -167,7 +166,7 @@ function generatePenStyles() {
 }
 
 function mapPosToCue(pos, pen) {
-	if (!pos) return { line: 98, position: 46.4,  align: "left" };
+	if (!pos) return { line: 98, position: 46.4, align: "left" };
 
 	const rawHor = pos.ahHorPos != null ? pos.ahHorPos : 50;
 	let rawVer = pos.avVerPos != null ? pos.avVerPos : 100;
@@ -183,32 +182,38 @@ function mapPosToCue(pos, pen) {
 		console.log("Adjusted hor for left anchor:", hor);
 	}
 	let position = hor;
-	let align = null;
+	let align = undefined;
+	let positionAlign = undefined;
 
 	if (hasAnchor) {
 		switch (anchorPoint) {
 			case 0:
 			case 3:
 			case 6:
-				align = "start";
+				align = positionAlign = "left";
 				break;
 			case 2:
 			case 5:
 			case 8:
-				align = "right";
+				align = positionAlign = "right";
 				break;
 			case 1:
 			case 4:
 			case 7:
-				align = "end";
+				align = "center";
 				break;
 		}
 	}
 
-	return { line: ver, position, align, lineAlign: align};
+	return {
+		line: ver,
+		position: position,
+		align: align,
+		positionAlign: positionAlign,
+	};
 }
 
-function addCuesToTrack(track, json) {
+function addCuesToTrack(track, json, stackProcess) {
 	const events = json.events || [];
 	const pens = json.pens || [];
 	const wpWinPositions = json.wpWinPositions || [];
@@ -235,16 +240,12 @@ function addCuesToTrack(track, json) {
 				parts.push(`<${ts(ev.tStartMs + seg.tOffsetMs, true)}>`); // Karaoke timing
 			}
 
-			let text = seg.utf8;
-			if (seg.pPenId != null) {
-				text = `<c.pen${seg.pPenId}>${text}</c>`;
-			} else {
-				text = `<c.bg>${text}</c>`;
-			}
-			parts.push(text);
+			parts.push(seg.pPenId != null ? `<c.pen${seg.pPenId}>` : `<c.bg>`);
+			parts.push(seg.utf8);
+			parts.push("</c>");
 		});
 
-		if (parts.length === 1 && parts[0] == "\n") continue; // Skip empty cues from auto-gen
+		if (parts.length === 3 && parts[1] == "\n") continue; // Skip empty cues from auto-gen
 
 		parts.unshift(`<c${ev.pPenId ? `.pen${ev.pPenId}` : ""}>`);
 		parts.push("</c>");
@@ -266,28 +267,55 @@ function addCuesToTrack(track, json) {
 			cue.position = rd(placement.position, 2);
 		}
 		placement.align && (cue.align = placement.align);
+		//placement.positionAlign && (cue.positionAlign = placement.positionAlign);
+
+		// When creating each cue in the loop, tag them if needed:
+		cue.id = ev.wpWinPosId ?? 0;
+
 		track.addCue(cue);
 	}
-	/*
-	// ---------- detect overlapping cues, merge left-align lines, and set snapToLines ----------
-	for (let i = 0; i < track.cues.length; i++) {
-		for (let j = i + 1; j < Math.min(i + 3, track.cues.length); j++) {
-			const cue1 = track.cues[i];
-			const cue2 = track.cues[j];
-			// Check if time ranges overlap
-			if (cue1.endTime > cue2.startTime && cue1.startTime <= cue2.endTime) {
-				// If both cues are left-aligned, append the next cue text into the first cue
-				// using an in-cue timestamp tag, then delay the second cue start to the end of the first.
-				if (cue1.align === "left" && cue2.align === "left") {
-					const timestamp = `<${ts(cue2.startTime * 1000, true)}>`;
-					cue1.text += `\n${timestamp}${cue2.text}`;
-					cue2.startTime = cue1.endTime;
-					if (cue2.endTime == cue1.endTime) track.removeCue(cue2);
-				}
+	if (!stackProcess) return;
+	// ---------- detect overlapping cues, merge left-align lines ----------
+	const cues = [...track.cues];
+	for (let i = 0; i < cues.length; i++) {
+		for (let j = i + 1; j < cues.length; j++) {
+			const c1 = cues[i];
+			const c2 = cues[j];
+
+			const overlapStart = Math.max(c1.startTime, c2.startTime);
+			const overlapEnd = Math.min(c1.endTime, c2.endTime);
+			if (overlapStart >= overlapEnd) continue; // no overlap
+
+			// Different window IDs = intentionally simultaneous, leave alone
+			if (c1.id !== c2.id) continue;
+
+			// Combined cue for the overlapping period
+			const merged = new VTTCue(
+				overlapStart,
+				overlapEnd,
+				c1.text + "\n" + c2.text,
+			);
+			merged.snapToLines = c1.snapToLines;
+			merged.line = c1.line;
+			merged.position = c1.position;
+			merged.align = c1.align;
+			track.addCue(merged);
+
+			// Trim c1 — remove if it has no solo time left
+			if (c1.startTime < overlapStart) {
+				c1.endTime = overlapStart;
+			} else {
+				track.removeCue(c1);
+			}
+
+			// Trim c2 — remove if it has no solo time left
+			if (c2.endTime > overlapEnd) {
+				c2.startTime = overlapEnd;
+			} else {
+				track.removeCue(c2);
 			}
 		}
 	}
-	*/
 }
 
 const po = new PerformanceObserver((list) => {
@@ -322,6 +350,7 @@ const po = new PerformanceObserver((list) => {
 			newURL.searchParams.set("tlang", userLang);
 		}
 		const translated = newURL.searchParams.has("tlang");
+		const isAutoGen = newURL.searchParams.get("kind") === "asr";
 
 		function createTrack() {
 			let track =
@@ -365,7 +394,7 @@ const po = new PerformanceObserver((list) => {
 				json3 = JSON.parse(json);
 			}
 			try {
-				addCuesToTrack(track, json3);
+				addCuesToTrack(track, json3, isAutoGen);
 			} catch (err) {
 				alert("Error adding captions:" + err + "\n" + err.stack);
 			}
@@ -383,13 +412,13 @@ function updateCaptionStyles() {
 
 window.onresize = () => updateCaptionStyles();
 
-if (winTitle) {
+if (video.src) {
 	new MutationObserver(() => {
 		const track = video?.textTracks[0];
-		[...(track?.cues || [])].forEach((cue) => track?.removeCue(cue));
+		[...(track.cues)].forEach((cue) => track?.removeCue(cue));
 		if (track?.mode === "showing") {
 			track.mode = "hidden";
 			track.mode = "showing";
 		} // Refresh
-	}).observe(winTitle, { characterData: true });
+	}).observe(video, { attributeFilter: ["src"] });
 }
