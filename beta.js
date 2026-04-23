@@ -213,7 +213,7 @@ function mapPosToCue(pos, pen) {
 	};
 }
 
-function addCuesToTrack(track, json) {
+function addCuesToTrack(track, json, stackProcess) {
 	const events = json.events || [];
 	const pens = json.pens || [];
 	const wpWinPositions = json.wpWinPositions || [];
@@ -274,8 +274,8 @@ function addCuesToTrack(track, json) {
 
 		track.addCue(cue);
 	}
-
-	// ---------- detect overlapping cues, merge left-align lines, and set snapToLines ----------
+	if (!stackProcess) return;
+	// ---------- detect overlapping cues, merge left-align lines ----------
 	const cues = [...track.cues];
 	for (let i = 0; i < cues.length; i++) {
 		for (let j = i + 1; j < cues.length; j++) {
@@ -350,6 +350,7 @@ const po = new PerformanceObserver((list) => {
 			newURL.searchParams.set("tlang", userLang);
 		}
 		const translated = newURL.searchParams.has("tlang");
+		const isAutoGen = newURL.searchParams.get("kind") === "asr";
 
 		function createTrack() {
 			let track =
@@ -393,7 +394,7 @@ const po = new PerformanceObserver((list) => {
 				json3 = JSON.parse(json);
 			}
 			try {
-				addCuesToTrack(track, json3);
+				addCuesToTrack(track, json3, isAutoGen);
 			} catch (err) {
 				alert("Error adding captions:" + err + "\n" + err.stack);
 			}
