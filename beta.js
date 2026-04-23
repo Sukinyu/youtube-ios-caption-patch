@@ -190,12 +190,12 @@ function mapPosToCue(pos, pen) {
 			case 0:
 			case 3:
 			case 6:
-				align = positionAlign = "left";
+				align = "start";
 				break;
 			case 2:
 			case 5:
 			case 8:
-				align = positionAlign = "right";
+				align = "end";
 				break;
 			case 1:
 			case 4:
@@ -254,7 +254,7 @@ function addCuesToTrack(track, json, stackProcess) {
 		if (!ev.segs?.length) continue;
 		if (ev.segs[0].utf8 === "\n") continue; // Skip auto-generated empty cues
 
-		cue.snapToLines = wpWinPositions ? false : true; // Gets set later if needed, but defaults to true and want false
+		cue.snapToLines = false;
 
 		// Get position data for this event
 		const posId = ev.wpWinPosId;
