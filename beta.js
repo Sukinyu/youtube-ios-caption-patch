@@ -166,15 +166,13 @@ function generatePenStyles() {
 }
 
 function mapPosToCue(pos, pen) {
-	if (!pos) return { line: 98, position: 5, align: "left" };
+	pos || (pos = {avVerPos: 90, ahHorPos: 5, apPoint: 6})
 
-	const rawHor = pos.ahHorPos != null ? pos.ahHorPos : 50;
-	let rawVer = pos.avVerPos != null ? pos.avVerPos : 100;
 	const anchorPoint = pos.apPoint;
 	const hasAnchor = anchorPoint != null;
-
-	let hor = rawHor * 0.96 + 2;
-	let ver = rawVer * 0.96 + 2;
+	
+	let ver = pos.avVerPos * 0.96 + 2;
+	let hor = pos.ahHorPos * 0.96 + 2;
 
 	const fontSizeIncrement = pen?.szPenSize ? pen.szPenSize / 100 - 1 : 0;
 	if (hasAnchor && [0, 3, 6].includes(anchorPoint)) {
@@ -313,11 +311,11 @@ function addCuesToTrack(track, json, stackProcess) {
 }
 
 const po = new PerformanceObserver((list) => {
+	if (!window.location.pathname.startsWith('/watch')) return;
 	for (const entry of list.getEntries()) {
 		const url = entry.name;
 		if (!url.includes("/api/timedtext") || injectedUrls.has(url)) continue;
 		injectedUrls.add(url);
-
 		console.log("Caption request detected:", url);
 		let newURL = new URL(url);
 		const removeParams = [
