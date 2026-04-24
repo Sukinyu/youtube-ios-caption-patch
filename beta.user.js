@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Fix MWeb Youtube Fullscreen Captions
 // @author       Sukinyu
-// @version      0.4.1a
+// @version      0.4.1c
 // @last         4/24/2026 (mm/dd/yyyy)
 // @description  Fix captions on youtube videos in webkit fullscreen mode on iOS (https://m.youtube.com/).
 // @match        https://m.youtube.com/*
@@ -310,6 +310,8 @@ function addCuesToTrack(track, json, stackProcess) {
 			merged.line = c1.line;
 			merged.position = c1.position;
 			merged.align = c1.align;
+			merged.positionAlign = c1.positionAlign;
+			merged.lineAlign = c1.lineAlign;
 			track.addCue(merged);
 
 			// Trim c1 — remove if it has no solo time left
