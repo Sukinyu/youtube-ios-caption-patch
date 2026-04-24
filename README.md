@@ -29,13 +29,15 @@ Test videos:
 | `beta.user.js`       | Active development. Uses `VTTCue` objects directly. Most up to date.                              |
 | `stable.user.js`     | A somewhat more stable version. Will fallback to requesting VTT. Won't convert auto-gen captions. |
 | `ytt-srv3-to-vtt.js` | Standalone JSON3 → VTT string converter. Originally was within stable.js; No longer maintained.   |
+ 
+`stable.user.js` is recommended. `beta.user.js` is used for more new features/support however may break often.  
 
 ## Usage
 
 ### As a userscript (recommended)
 
 1. Install a userscript manager on iOS — [UserScripts](https://apps.apple.com/app/userscripts/id1463298887) (free, open source) or [Tampermonkey](https://apps.apple.com/app/tampermonkey/id1482490089)
-2. Download `beta.user.js`, or install directly via the raw URL
+2. Download the `stable`/`beta`, or install directly via the raw URL
 3. The userscript manager will detect the `==UserScript==` metadata block and install it automatically
 
 ### As raw JavaScript
@@ -43,7 +45,6 @@ Test videos:
 Use Hyperweb, an app that is no longer maintained, and create an advanced local enhancement.  
 This or some-other app that is likely better.
 
-`stable.user.js` is recommended. `beta.user.js` is used for more new features/support however may break often.
 
 ## Known Issues
 
