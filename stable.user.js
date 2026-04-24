@@ -5,6 +5,9 @@
 // @last         4/24/2026 (mm/dd/yyyy)
 // @description  Fix captions on youtube videos in webkit fullscreen mode on iOS (https://m.youtube.com/).
 // @match        https://m.youtube.com/*
+// @run-at 			 document-start
+// @updateURL    https://raw.githubusercontent.com/Sukinyu/youtube-ios-caption-patch/main/beta.user.js
+// @downloadURL  https://raw.githubusercontent.com/Sukinyu/youtube-ios-caption-patch/main/beta.user.js
 // ==/UserScript==
 
 const injectedUrls = new Set();

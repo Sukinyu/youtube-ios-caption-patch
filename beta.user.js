@@ -1,10 +1,13 @@
 // ==UserScript==
 // @name         Fix MWeb Youtube Fullscreen Captions
 // @author       Sukinyu
-// @version      0.4.0
+// @version      0.4.1
 // @last         4/24/2026 (mm/dd/yyyy)
 // @description  Fix captions on youtube videos in webkit fullscreen mode on iOS (https://m.youtube.com/).
 // @match        https://m.youtube.com/*
+// @run-at 			 document-start
+// @updateURL    https://raw.githubusercontent.com/Sukinyu/youtube-ios-caption-patch/main/beta.user.js
+// @downloadURL  https://raw.githubusercontent.com/Sukinyu/youtube-ios-caption-patch/main/beta.user.js
 // ==/UserScript==
 
 const injectedUrls = new Set();
@@ -195,6 +198,7 @@ function mapPosToCue(pos, pen) {
 	let position = hor;
 	let align = undefined;
 	let positionAlign = undefined;
+	let lineAlign = end;
 
 	if (hasAnchor) {
 		switch (anchorPoint) {
@@ -215,12 +219,14 @@ function mapPosToCue(pos, pen) {
 				break;
 		}
 	}
+	[0,1,2].includes(anchorPoint) && (positionAlign = null);
 
 	return {
 		line: ver,
 		position: position,
 		align: align,
-		positionAlign: positionAlign,
+		positionAlign: positionAlign, // Defaults to 'auto'
+		lineAlign: lineAlign, // Defaults to 'start' if unset
 	};
 }
 
@@ -279,6 +285,7 @@ function addCuesToTrack(track, json, stackProcess) {
 		}
 		placement.align && (cue.align = placement.align);
 		placement.positionAlign && (cue.positionAlign = placement.positionAlign);
+		placement.lineAlign && (cue.lineAlign = placement.lineAlign)
 
 		track.addCue(cue);
 	}
