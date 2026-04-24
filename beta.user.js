@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Fix MWeb Youtube Fullscreen Captions
 // @author       Sukinyu
-// @version      0.4.1
+// @version      0.4.1a
 // @last         4/24/2026 (mm/dd/yyyy)
 // @description  Fix captions on youtube videos in webkit fullscreen mode on iOS (https://m.youtube.com/).
 // @match        https://m.youtube.com/*
@@ -198,7 +198,7 @@ function mapPosToCue(pos, pen) {
 	let position = hor;
 	let align = undefined;
 	let positionAlign = undefined;
-	let lineAlign = end;
+	let lineAlign = "end";
 
 	if (hasAnchor) {
 		switch (anchorPoint) {
