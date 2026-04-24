@@ -1,12 +1,12 @@
 // ==UserScript==
 // @name         Fix MWeb Youtube Fullscreen Captions
 // @author       Sukinyu
-// @version      0.4.1c
+// @version      1.0.0
 // @last         4/24/2026 (mm/dd/yyyy)
 // @description  Fix captions on youtube videos in webkit fullscreen mode on iOS (https://m.youtube.com/).
 // @match        https://m.youtube.com/*
-// @updateURL    https://raw.githubusercontent.com/Sukinyu/youtube-ios-caption-patch/main/beta.user.js
-// @downloadURL  https://raw.githubusercontent.com/Sukinyu/youtube-ios-caption-patch/main/beta.user.js
+// @updateURL    https://github.com/Sukinyu/youtube-ios-caption-patch/raw/refs/heads/main/beta.user.js
+// @downloadURL  https://github.com/Sukinyu/youtube-ios-caption-patch/raw/refs/heads/main/beta.user.js
 // ==/UserScript==
 
 const injectedUrls = new Set();

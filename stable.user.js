@@ -1,12 +1,12 @@
 // ==UserScript==
 // @name         Fix MWeb Youtube Fullscreen Captions
 // @author       Sukinyu
-// @version      0.4.1a
+// @version      1.0.0
 // @last         4/24/2026 (mm/dd/yyyy)
 // @description  Fix captions on youtube videos in webkit fullscreen mode on iOS (https://m.youtube.com/).
 // @match        https://m.youtube.com/*
-// @updateURL    https://raw.githubusercontent.com/Sukinyu/youtube-ios-caption-patch/main/beta.user.js
-// @downloadURL  https://raw.githubusercontent.com/Sukinyu/youtube-ios-caption-patch/main/beta.user.js
+// @updateURL    https://github.com/Sukinyu/youtube-ios-caption-patch/raw/refs/heads/main/stable.user.js
+// @downloadURL  https://github.com/Sukinyu/youtube-ios-caption-patch/raw/refs/heads/main/stable.user.js
 // ==/UserScript==
 
 const injectedUrls = new Set();
@@ -42,19 +42,6 @@ function rd(num, decimals = 4) {
 	return Number(num.toFixed(decimals));
 }
 
-const parseJson3 = (json) => {
-	try {
-		return JSON.parse(json);
-	} catch {
-		return JSON.parse(
-			json.replace(
-				/"utf8":\s*"([\s\S]*?)"/g,
-				(_, content) => `"utf8": "${content.replace(/\n/g, "\\n")}"`,
-			),
-		);
-	}
-};
-
 function penFontFamily(pen) {
 	const fontFamily = pen.fsFontStyle;
 	switch (fontFamily) {
@@ -74,6 +61,19 @@ function penFontFamily(pen) {
 			return 'Arial, Helvetica, Verdana, "Marcellus SC", sans-serif';
 	}
 }
+
+const parseJson3 = (json) => {
+	try {
+		return JSON.parse(json);
+	} catch {
+		return JSON.parse(
+			json.replace(
+				/"utf8":\s*"([\s\S]*?)"/g,
+				(_, content) => `"utf8": "${content.replace(/\n/g, "\\n")}"`,
+			),
+		);
+	}
+};
 
 function penToCss(pen) {
 	if (!pen) return "color: rgba(255,255,255,1);";
@@ -197,6 +197,7 @@ function mapPosToCue(pos, pen) {
 	let position = hor;
 	let align = undefined;
 	let positionAlign = undefined;
+	let lineAlign = "end";
 
 	if (hasAnchor) {
 		switch (anchorPoint) {
@@ -217,12 +218,14 @@ function mapPosToCue(pos, pen) {
 				break;
 		}
 	}
+	[0,1,2].includes(anchorPoint) && (positionAlign = null);
 
 	return {
 		line: ver,
 		position: position,
 		align: align,
-		positionAlign: positionAlign,
+		positionAlign: positionAlign, // Defaults to 'auto'
+		lineAlign: lineAlign, // Defaults to 'start' if unset
 	};
 }
 
@@ -281,6 +284,7 @@ function addCuesToTrack(track, json, stackProcess) {
 		}
 		placement.align && (cue.align = placement.align);
 		placement.positionAlign && (cue.positionAlign = placement.positionAlign);
+		placement.lineAlign && (cue.lineAlign = placement.lineAlign)
 
 		track.addCue(cue);
 	}
@@ -306,6 +310,8 @@ function addCuesToTrack(track, json, stackProcess) {
 			merged.line = c1.line;
 			merged.position = c1.position;
 			merged.align = c1.align;
+			merged.positionAlign = c1.positionAlign;
+			merged.lineAlign = c1.lineAlign;
 			track.addCue(merged);
 
 			// Trim c1 — remove if it has no solo time left
