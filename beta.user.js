@@ -1,10 +1,10 @@
 // ==UserScript==
 // @name         Fix MWeb Youtube Fullscreen Captions
 // @author       Sukinyu
-// @version      0.3.49
-// @last         4/21/2026 (mm/dd/yyyy)
-// @description  Fix captions on youtube videos in fullscreen mode on iOS (https://m.youtube.com/watch?). Injects a captions track with user-preferred language.
-// @match        https://m.youtube.com/watch?*
+// @version      0.4.0
+// @last         4/24/2026 (mm/dd/yyyy)
+// @description  Fix captions on youtube videos in webkit fullscreen mode on iOS (https://m.youtube.com/).
+// @match        https://m.youtube.com/*
 // ==/UserScript==
 
 const injectedUrls = new Set();
@@ -59,6 +59,19 @@ function penFontFamily(pen) {
 			return 'Arial, Helvetica, Verdana, "Marcellus SC", sans-serif';
 	}
 }
+
+const parseJson3 = (json) => {
+	try {
+		return JSON.parse(json);
+	} catch {
+		return JSON.parse(
+			json.replace(
+				/"utf8":\s*"([\s\S]*?)"/g,
+				(_, content) => `"utf8": "${content.replace(/\n/g, "\\n")}"`,
+			),
+		);
+	}
+};
 
 function penToCss(pen) {
 	if (!pen) return "color: rgba(255,255,255,1);";
@@ -126,7 +139,7 @@ function penToCss(pen) {
 	const fontVariant =
 		Number(pen.fsFontStyle ?? 0) === 7 ? "font-variant: small-caps;" : "";
 	const fontFamilyCss = !fontFamily ? "" : `font-family: ${fontFamily};`;
-	
+
 	return `
 				${italic} ${fontVariant} ${bold} ${underline}
 				color: rgba(${c},${foreAlpha});
@@ -166,7 +179,7 @@ function generatePenStyles() {
 }
 
 function mapPosToCue(pos, pen) {
-	pos || (pos = {avVerPos: 90, ahHorPos: 5, apPoint: 6})
+	pos || (pos = { avVerPos: 90, ahHorPos: 5, apPoint: 6 });
 
 	const anchorPoint = pos.apPoint;
 	const hasAnchor = anchorPoint != null;
@@ -311,7 +324,7 @@ function addCuesToTrack(track, json, stackProcess) {
 }
 
 const po = new PerformanceObserver((list) => {
-	if (!window.location.pathname.startsWith('/watch')) return;
+	if (!window.location.pathname.startsWith("/watch")) return;
 	for (const entry of list.getEntries()) {
 		const url = entry.name;
 		if (!url.includes("/api/timedtext") || injectedUrls.has(url)) continue;
@@ -373,24 +386,11 @@ const po = new PerformanceObserver((list) => {
 				return r.text();
 			});
 		};
-		tryFetch("json3").then((json) => {
-			let json3;
-			let track = createTrack();
-			try {
-				json3 = JSON.parse(json);
-			} catch {
-				json = json.replace(/"utf8":\s*"([\s\S]*?)"/g, (match, content) => {
-					const fixed = content.replace(/\n/g, "\\n"); // Fix newlines
-					return `"utf8": "${fixed}"`;
-				});
-				json3 = JSON.parse(json);
-			}
-			try {
-				addCuesToTrack(track, json3, isAutoGen);
-			} catch (err) {
-				alert("Error adding captions:" + err + "\n" + err.stack);
-			}
-		});
+
+		let track = createTrack();
+		tryFetch("json3")
+			.then((json) => addCuesToTrack(track, parseJson3(json), isAutoGen))
+			.catch((err) => alert(`Error adding captions: ${err}\n${err.stack}`));
 	}
 });
 
@@ -407,7 +407,7 @@ window.onresize = () => updateCaptionStyles();
 if (video.src) {
 	new MutationObserver(() => {
 		const track = video?.textTracks[0];
-		[...(track.cues)].forEach((cue) => track?.removeCue(cue));
+		[...track.cues].forEach((cue) => track?.removeCue(cue));
 		if (track?.mode === "showing") {
 			track.mode = "hidden";
 			track.mode = "showing";
