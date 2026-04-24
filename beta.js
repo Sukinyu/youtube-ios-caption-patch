@@ -119,16 +119,16 @@ function penToCss(pen) {
 	}
 
 	// Text decorations
-	const bold = pen.bAttr == 1 ? "font-weight: bold;" : "";
+	const bold = pen.bAttr == 1 ? "font-weight: bolder;" : "";
 	const italic = pen.iAttr == 1 ? "font-style: italic;" : "";
 	const underline = pen.uAttr == 1 ? "text-decoration: underline;" : "";
 	const fontFamily = penFontFamily(pen);
 	const fontVariant =
 		Number(pen.fsFontStyle ?? 0) === 7 ? "font-variant: small-caps;" : "";
 	const fontFamilyCss = !fontFamily ? "" : `font-family: ${fontFamily};`;
-
+	
 	return `
-				${bold} ${italic} ${underline} ${fontVariant}
+				${italic} ${fontVariant} ${bold} ${underline}
 				color: rgba(${c},${foreAlpha});
 				background: rgba(${cB},${backAlpha});
 				${fontFamilyCss}
@@ -170,7 +170,7 @@ function mapPosToCue(pos, pen) {
 
 	const anchorPoint = pos.apPoint;
 	const hasAnchor = anchorPoint != null;
-	
+
 	let ver = pos.avVerPos * 0.96 + 2;
 	let hor = pos.ahHorPos * 0.96 + 2;
 
