@@ -169,8 +169,7 @@ function generatePenStyles() {
 
 	const vRect = video?.getBoundingClientRect();
 	const fs = calculateBaseFontSize(vRect?.width, vRect?.height);
-	let style = `::-webkit-media-text-track-display {font-family: ${defaultFont}; font-size: ${fs}px; line-height: normal; }\n`;
-	//let style = `::cue(c) { font-family: ${defaultFont}; font-size: ${fs}px; line-height: normal; }\n`;
+	let style = `::cue(c) { font-family: ${defaultFont}; font-size: ${fs}px; line-height: normal; }\n`;
 	style += `::cue(.bg) { background: rgba(0,0,0,0.5);}\n`;
 
 	for (let i = 0; i < currentPens.length; i++) {
