@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         Fix MWeb Youtube Fullscreen Captions
 // @author       Sukinyu
-// @version      1.0.1
-// @last         4/26/2026 (mm/dd/yyyy)
+// @version      1.0.2
+// @last         4/27/2026 (mm/dd/yyyy)
 // @description  Fix captions on youtube videos in webkit fullscreen mode on iOS (https://m.youtube.com/).
 // @match        https://m.youtube.com/*
 // @updateURL    https://github.com/Sukinyu/youtube-ios-caption-patch/raw/refs/heads/main/beta.user.js
@@ -39,7 +39,7 @@ function rgb(num) {
 	return `${(num >> 16) & 255},${(num >> 8) & 255},${num & 255}`;
 }
 function rd(num, decimals = 4) {
-	return Number(num.toFixed(decimals));
+	return +num.toFixed(decimals);
 }
 
 function penFontFamily(pen) {
@@ -186,7 +186,7 @@ function mapPosToCue(pos, pen) {
 	const anchorPoint = pos.apPoint;
 	const hasAnchor = anchorPoint != null;
 
-	let ver = pos.avVerPos * 0.96 + 2;
+	let ver = pos.avVerPos * 0.97 + 1;
 	let hor = pos.ahHorPos * 0.96 + 2;
 
 	const fontSizeIncrement = pen?.szPenSize ? pen.szPenSize / 100 - 1 : 0;
