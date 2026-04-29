@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         Fix MWeb Youtube Fullscreen Captions
 // @author       Sukinyu
-// @version      1.0.2
-// @last         4/27/2026 (mm/dd/yyyy)
+// @version      1.0.3
+// @last         4/29/2026 (mm/dd/yyyy)
 // @description  Fix captions on youtube videos in webkit fullscreen mode on iOS (https://m.youtube.com/).
 // @match        https://m.youtube.com/*
 // @updateURL    https://github.com/Sukinyu/youtube-ios-caption-patch/raw/refs/heads/main/beta.user.js
@@ -170,6 +170,7 @@ function generatePenStyles() {
 	const vRect = video?.getBoundingClientRect();
 	const fs = calculateBaseFontSize(vRect?.width, vRect?.height);
 	let style = `::cue(c) { font-family: ${defaultFont}; font-size: ${fs}px; line-height: normal; }\n`;
+	style = `::cue(v) { font-family: ${defaultFont}; font-size: ${fs}px; line-height: normal; }\n`;
 	style += `::cue(.bg) { background: rgba(0,0,0,0.5);}\n`;
 
 	for (let i = 0; i < currentPens.length; i++) {
@@ -263,8 +264,8 @@ function addCuesToTrack(track, json, stackProcess) {
 
 		if (parts.length === 3 && parts[1] == "\n") continue; // Skip empty cues from auto-gen
 
-		parts.unshift(`<c${ev.pPenId ? `.pen${ev.pPenId}` : ""}>`);
-		parts.push("</c>");
+		parts.unshift(`<v${ev.pPenId ? `.pen${ev.pPenId}` : ""}>`);
+		parts.push("</v>");
 		let cueText = parts.join("");
 		let cue = new VTTCue(start, end, cueText);
 		if (!ev.segs?.length) continue;
