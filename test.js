@@ -252,7 +252,9 @@ function addCuesToTrack(track, json, stackProcess) {
         parts.push(`<${ts(ev.tStartMs + seg.tOffsetMs, true)}>`); // Karaoke timing
       }
 
-      parts.unshift(seg.pPenId != null ? `<c.pen${seg.pPenId}>` : `<c.bg>`);
+      const penId = seg.pPenId ? seg.pPenId : ev.pPenId;
+
+      parts.unshift(penId != null ? `<c.pen${penId}>` : `<c.bg>`);
       parts.push(seg.utf8);
       parts.push("</c>");
     });
