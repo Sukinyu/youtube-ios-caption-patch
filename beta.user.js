@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Fix MWeb Youtube Fullscreen Captions
 // @author       Sukinyu
-// @version      1.0.7
+// @version      1.0.8
 // @last         5/1/2026 (mm/dd/yyyy)
 // @description  Fix captions on youtube videos in webkit fullscreen mode on iOS (https://m.youtube.com/).
 // @match        https://m.youtube.com/*
@@ -198,7 +198,7 @@ function mapPosToCue(pos, pen, style) {
 		console.log("Adjusted hor for left anchor:", hor);
 	}
 	let position = hor;
-	let align = 'left';
+	let align = "left";
 	let positionAlign = undefined;
 	let lineAlign = "end";
 	/*
@@ -226,14 +226,14 @@ function mapPosToCue(pos, pen, style) {
 	switch (style?.juJustifCode) {
 		case 0:
 			align = "right";
-			positionAlign = 'line-right';
+			positionAlign = "line-right";
 			break;
 		case 1:
-			positionAlign = 'line-left'
+			//positionAlign = "line-left";
 			break;
 		case 2:
-			align = '';
-			positionAlign = 'center';
+			align = "";
+			positionAlign = "";
 	}
 
 	return {
@@ -267,6 +267,7 @@ function addCuesToTrack(track, json, stackProcess) {
 		const start = Number(ts(ev.tStartMs));
 		const end = Number(ts(ev.tStartMs + (ev.dDurationMs || 0)));
 		const parts = [];
+
 		ev.segs.forEach((seg) => {
 			if (!seg.utf8.length) return;
 
@@ -283,10 +284,6 @@ function addCuesToTrack(track, json, stackProcess) {
 
 		if (parts.length === 3 && parts[1] == "\n") continue; // Skip empty cues from auto-gen
 
-		/*
-    parts.unshift(`<v${ev.pPenId ? `.pen${ev.pPenId}` : ""}>`);
-    parts.push("</v>");
-    */
 		let cueText = parts.join("");
 		let cue = new VTTCue(start, end, cueText);
 		if (!ev.segs?.length) continue;
