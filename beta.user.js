@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Fix MWeb Youtube Fullscreen Captions
 // @author       Sukinyu
-// @version      1.0.8
+// @version      1.0.9
 // @last         5/1/2026 (mm/dd/yyyy)
 // @description  Fix captions on youtube videos in webkit fullscreen mode on iOS (https://m.youtube.com/).
 // @match        https://m.youtube.com/*
@@ -14,6 +14,8 @@ const video = document.querySelector("video");
 const defaultFont =
 	'"YouTube Noto", Roboto, Arial, Helvetica, Verdana, "PT Sans Caption", sans-serif';
 let currentPens = [];
+const isMWEB = window.location.host.startsWith("m.");
+const bold = isMWEB ? [, "bold"] : ["bold;", "font-weight: 900;"];
 
 function calculateBaseFontSize(videoWidth, videoHeight) {
 	let baseSize = (videoHeight / 360) * 16;
@@ -123,7 +125,7 @@ function penToCss(pen) {
 				textShadow += `${K}px ${K}px ${lightShadow}, -${K}px -${K}px ${darkShadow}`;
 				break;
 			case 3: // Glow (most common)
-				textShadow += Array(6).fill(`0 0 ${v}px ${darkShadow}`).join(", ");
+				textShadow += Array(5).fill(`0 0 ${v}px ${darkShadow}`).join(", ");
 				break;
 			case 4: // Blur effect
 				const shadows = [];
@@ -137,16 +139,16 @@ function penToCss(pen) {
 	}
 
 	// Text decorations
-	const bold = pen.bAttr == 1 ? "font-weight: bolder;" : "";
-	const italic = pen.iAttr == 1 ? "font-style: italic;" : "";
-	const underline = pen.uAttr == 1 ? "text-decoration: underline;" : "";
+	const b = pen.bAttr == 1 ? `font-weight: ${bold[1]};` : "";
+	const i = pen.iAttr == 1 ? "font-style: italic;" : "";
+	const u = pen.uAttr == 1 ? "text-decoration: underline;" : "";
 	const fontFamily = penFontFamily(pen);
 	const fontVariant =
 		Number(pen.fsFontStyle ?? 0) === 7 ? "font-variant: small-caps;" : "";
 	const fontFamilyCss = !fontFamily ? "" : `font-family: ${fontFamily};`;
 
 	return `
-				${italic} ${fontVariant} ${bold} ${underline}
+				${i} ${fontVariant} ${b} ${u}
 				color: rgba(${c},${foreAlpha});
 				${backgroundCss}
 				${fontFamilyCss}
@@ -172,8 +174,8 @@ function generatePenStyles() {
 
 	const vRect = video?.getBoundingClientRect();
 	const fs = calculateBaseFontSize(vRect?.width, vRect?.height);
-	let style = `::cue(c) { font-family: ${defaultFont}; font-size: ${fs}px; line-height: normal; }\n`;
-	style += `::cue(.bg) { background: rgba(0,0,0,0.5);}\n`;
+	let style = `::cue(c) { font-family: ${defaultFont}; font-size: ${fs}px; ${bold[0]} line-height: normal; }\n`;
+	style += `::cue(.bg) { background: rgba(0,0,0,0.5); }\n\n`;
 
 	for (let i = 0; i < currentPens.length; i++) {
 		const pen = currentPens[i];
@@ -184,7 +186,7 @@ function generatePenStyles() {
 }
 
 function mapPosToCue(pos, pen, style) {
-	pos || (pos = { avVerPos: 90, ahHorPos: 5, apPoint: 6 });
+	pos || (pos = { avVerPos: 95, ahHorPos: 5, apPoint: 6 });
 
 	const anchorPoint = pos.apPoint;
 	const hasAnchor = anchorPoint != null;
@@ -201,27 +203,6 @@ function mapPosToCue(pos, pen, style) {
 	let align = "left";
 	let positionAlign = undefined;
 	let lineAlign = "end";
-	/*
-	if (hasAnchor) {
-		switch (anchorPoint) {
-			case 0:
-			case 3:
-			case 6:
-				align = "left";
-				break;
-			case 2:
-			case 5:
-			case 8:
-				align = "right";
-				break;
-			case 1:
-			case 4:
-			case 7:
-				align = "center";
-				break;
-		}
-	}
-	*/
 
 	switch (style?.juJustifCode) {
 		case 0:
@@ -270,6 +251,7 @@ function addCuesToTrack(track, json, stackProcess) {
 
 		ev.segs.forEach((seg) => {
 			if (!seg.utf8.length) return;
+			if (seg.utf8 == "​") return; // 0 width space
 
 			if (seg.tOffsetMs) {
 				parts.push(`<${ts(ev.tStartMs + seg.tOffsetMs, true)}>`); // Karaoke timing
