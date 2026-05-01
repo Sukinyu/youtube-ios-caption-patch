@@ -238,13 +238,12 @@ function addCuesToTrack(track, json, stackProcess) {
   const style = generatePenStyles();
   if (style) setCaptionStyle(style);
 
-  // ---------- build cues array first ----------
+  // ---------- build cues ----------
   for (const ev of events) {
     if (!ev.segs || !ev.segs.length) continue; // Skip events without segments
     const start = Number(ts(ev.tStartMs));
     const end = Number(ts(ev.tStartMs + (ev.dDurationMs || 0)));
     const parts = [];
-    const numOfSegs = ev.segs.length;
     ev.segs.forEach((seg) => {
       if (!seg.utf8.length) return;
 
@@ -253,6 +252,7 @@ function addCuesToTrack(track, json, stackProcess) {
       }
 
       const penId = seg.pPenId ? seg.pPenId : ev.pPenId;
+      console.log("Segment pen ID:", penId);
 
       parts.unshift(penId != null ? `<c.pen${penId}>` : `<c.bg>`);
       parts.push(seg.utf8);
