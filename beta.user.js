@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Fix MWeb Youtube Fullscreen Captions
 // @author       Sukinyu
-// @version      1.0.5
+// @version      1.0.6
 // @last         5/1/2026 (mm/dd/yyyy)
 // @description  Fix captions on youtube videos in webkit fullscreen mode on iOS (https://m.youtube.com/).
 // @match        https://m.youtube.com/*
@@ -173,7 +173,6 @@ function generatePenStyles() {
 	const vRect = video?.getBoundingClientRect();
 	const fs = calculateBaseFontSize(vRect?.width, vRect?.height);
 	let style = `::cue(c) { font-family: ${defaultFont}; font-size: ${fs}px; line-height: normal; }\n`;
-	//style += `::cue(v) { font-family: ${defaultFont}; font-size: ${fs}px; line-height: normal; }\n`;
 	style += `::cue(.bg) { background: rgba(0,0,0,0.5);}\n`;
 
 	for (let i = 0; i < currentPens.length; i++) {
@@ -184,7 +183,7 @@ function generatePenStyles() {
 	return style;
 }
 
-function mapPosToCue(pos, pen) {
+function mapPosToCue(pos, pen, style) {
 	pos || (pos = { avVerPos: 90, ahHorPos: 5, apPoint: 6 });
 
 	const anchorPoint = pos.apPoint;
@@ -199,10 +198,10 @@ function mapPosToCue(pos, pen) {
 		console.log("Adjusted hor for left anchor:", hor);
 	}
 	let position = hor;
-	let align = undefined;
+	let align;
 	let positionAlign = undefined;
 	let lineAlign = "end";
-
+	/*
 	if (hasAnchor) {
 		switch (anchorPoint) {
 			case 0:
@@ -222,7 +221,18 @@ function mapPosToCue(pos, pen) {
 				break;
 		}
 	}
-	[0, 1, 2].includes(anchorPoint) && (positionAlign = null);
+	*/
+
+	switch (style?.juJustifCode) {
+		case 0:
+			align = "right";
+			positionAlign = 'line-right';
+			break;
+		case 1:
+			align = "left";
+			positionAlign = 'line-left'
+			break;
+	}
 
 	return {
 		line: ver,
@@ -230,6 +240,7 @@ function mapPosToCue(pos, pen) {
 		align: align,
 		positionAlign: positionAlign, // Defaults to 'auto'
 		lineAlign: lineAlign, // Defaults to 'start' if unset
+		vertical: null,
 	};
 }
 
@@ -237,6 +248,7 @@ function addCuesToTrack(track, json, stackProcess) {
 	const events = json.events || [];
 	const pens = json.pens || [];
 	const wpWinPositions = json.wpWinPositions || [];
+	const wsWinStyles = json.wsWinStyles || [];
 
 	// Store pens globally for resize updates
 	currentPens = pens;
@@ -261,9 +273,8 @@ function addCuesToTrack(track, json, stackProcess) {
 			}
 
 			const penId = seg.pPenId ? seg.pPenId : ev.pPenId;
-			console.log("Segment pen ID:", penId);
 
-			parts.unshift(penId != null ? `<c.pen${penId}>` : `<c.bg>`);
+			parts.push(penId != null ? `<c.pen${penId}>` : `<c.bg>`);
 			parts.push(seg.utf8);
 			parts.push("</c>");
 		});
@@ -282,10 +293,10 @@ function addCuesToTrack(track, json, stackProcess) {
 		cue.snapToLines = false;
 
 		// Get position data for this event
-		const posId = ev.wpWinPosId;
-		const pos = wpWinPositions[posId];
-		const eventPen = ev.pPenId != null ? pens[ev.pPenId] : null;
-		const placement = mapPosToCue(pos, eventPen);
+		const pos = wpWinPositions[ev.wpWinPosId];
+		const eventPen = pens[ev.pPenId];
+		const eventStyle = wsWinStyles[ev.wsWinStyleId];
+		const placement = mapPosToCue(pos, eventPen, eventStyle);
 
 		placement.line && (cue.line = rd(placement.line, 2));
 		if (placement.position != null) {
