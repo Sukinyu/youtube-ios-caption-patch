@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Fix MWeb Youtube Fullscreen Captions
 // @author       Sukinyu
-// @version      1.0.12
+// @version      1.0.13
 // @last         5/1/2026 (mm/dd/yyyy)
 // @description  Fix captions on youtube videos in webkit fullscreen mode on iOS (https://m.youtube.com/).
 // @match        https://m.youtube.com/*
@@ -173,7 +173,7 @@ function generatePenStyles() {
 
 	const vRect = video?.getBoundingClientRect();
 	const fs = calculateBaseFontSize(vRect?.width, vRect?.height);
-	let style = `::cue(c) { font-family: ${defaultFont}; font-size: ${fs}px; ${isMWEB ? "font-weight: 600;" : ""} line-height: normal; }\n`;
+	let style = `::cue(c) { font-family: ${defaultFont}; font-size: ${fs}px; ${isMWEB ? "font-weight: 500;" : ""} line-height: normal; }\n`;
 	style += `::cue(.bg) { background: rgba(0,0,0,0.5); }\n\n`;
 
 	for (let i = 0; i < currentPens.length; i++) {
