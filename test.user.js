@@ -164,7 +164,7 @@ function penToCss(pen) {
 			case 1: // Uniform raised
 				const step = window.devicePixelRatio >= 2 ? 0.5 : 1;
 				textShadow += Array.from(
-					{ length: Math.ceil((w - K) / step) + 1 },
+					{ length: Math.ceil((w - K) / step) },
 					(_, i) => `${K + i * step}px ${K + i * step}px ${darkShadow}`,
 				).join(", ");
 				break;
