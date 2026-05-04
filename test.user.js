@@ -316,6 +316,7 @@ function addCuesToTrack(track, json, stackProcess) {
 		if (!ev.segs || !ev.segs.length) continue; // Skip events without segments
 		const start = Number(ts(ev.tStartMs));
 		const end = Number(ts(ev.tStartMs + (ev.dDurationMs || 0)));
+		/** @type {String[]} */
 		const parts = [];
 
 		ev.segs.forEach((seg) => {
@@ -334,6 +335,9 @@ function addCuesToTrack(track, json, stackProcess) {
 		});
 
 		if (parts.length === 3 && parts[1] == "\n") continue; // Skip empty cues from auto-gen
+
+		parts[1].startsWith(" ") || (parts[1] = " " + parts[1]);
+		parts[parts.length - 2].endsWith(" ") || (parts[parts.length - 2] += " ");
 
 		let cueText = parts.join("");
 		let cue = new VTTCue(start, end, cueText);
