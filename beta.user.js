@@ -1,14 +1,64 @@
 // ==UserScript==
 // @name         Fix MWeb Youtube Fullscreen Captions
 // @author       Sukinyu
-// @version      1.0.14
-// @last         5/3/2026 (mm/dd/yyyy)
+// @version      1.0.15
+// @last         5/4/2026 (mm/dd/yyyy)
 // @description  Fix captions on youtube videos in webkit fullscreen mode on iOS (https://m.youtube.com/).
 // @match        https://m.youtube.com/*
 // @updateURL    https://github.com/Sukinyu/youtube-ios-caption-patch/raw/refs/heads/main/beta.user.js
 // @downloadURL  https://github.com/Sukinyu/youtube-ios-caption-patch/raw/refs/heads/main/beta.user.js
 // ==/UserScript==
+/**
+ * @typedef {Object} Json3Seg
+ * @property {string} utf8
+ * @property {number} [tOffsetMs]
+ * @property {number} [pPenId]
+ */
 
+/**
+ * @typedef {Object} Json3Event
+ * @property {number} tStartMs
+ * @property {number} dDurationMs
+ * @property {number} [wpWinPosId]
+ * @property {number} [wsWinStyleId]
+ * @property {number} [pPenId]
+ * @property {Json3Seg[]} segs
+ */
+
+/**
+ * @typedef {Object} Json3Pen
+ * @property {number} [fcForeColor]
+ * @property {number} [foForeAlpha]
+ * @property {number} [bcBackColor]
+ * @property {number} [boBackAlpha]
+ * @property {number} [etEdgeType]
+ * @property {number} [ecEdgeColor]
+ * @property {number} [szPenSize]
+ * @property {number} [fsFontStyle]
+ * @property {number} [bAttr]
+ * @property {number} [iAttr]
+ * @property {number} [uAttr]
+ */
+
+/**
+ * @typedef {Object} Json3WinPos
+ * @property {number} apPoint
+ * @property {number} ahHorPos
+ * @property {number} avVerPos
+ */
+
+/**
+ * @typedef {Object} Json3WinStyle
+ * @property {number} [juJustifCode]
+ */
+
+/**
+ * @typedef {Object} Json3
+ * @property {Json3Event[]} events
+ * @property {Json3Pen[]} pens
+ * @property {Json3WinPos[]} wpWinPositions
+ * @property {Json3WinStyle[]} wsWinStyles
+ */
 const injectedUrls = new Set();
 const video = document.querySelector("video");
 const defaultFont =
@@ -63,6 +113,7 @@ function penFontFamily(pen) {
 	}
 }
 
+/** @type {function(string): Json3} */
 const parseJson3 = (json) => {
 	try {
 		return JSON.parse(json);
@@ -184,13 +235,14 @@ function generatePenStyles() {
 	return style;
 }
 
+/** @param {Json3WinPos} pos @param {Json3Pen} pen @param {Json3WinStyle} style */
 function mapPosToCue(pos, pen, style) {
 	pos || (pos = { avVerPos: 95, ahHorPos: 5, apPoint: 6 });
 
 	const anchorPoint = pos.apPoint;
 	const hasAnchor = anchorPoint != null;
 
-	let ver = pos.avVerPos * 0.97 + 1;
+	let ver = pos.avVerPos * 0.96 + 2;
 	let hor = pos.ahHorPos * 0.96 + 2;
 
 	const fontSizeIncrement = pen?.szPenSize ? pen.szPenSize / 100 - 1 : 0;
@@ -204,12 +256,12 @@ function mapPosToCue(pos, pen, style) {
 	let lineAlign = "end";
 
 	switch (style?.juJustifCode) {
+		/*case 0:
+			positionAlign = "line-left";
+			break;*/
 		case 1:
 			align = "right";
 			positionAlign = "line-right";
-			break;
-		case 0:
-			//positionAlign = "line-left";
 			break;
 		case 2:
 			align = "";
@@ -217,7 +269,7 @@ function mapPosToCue(pos, pen, style) {
 	}
 
 	return {
-		line: ver,
+		line: rd(ver, 2),
 		position: position,
 		align: align,
 		positionAlign: positionAlign, // Defaults to 'auto'
@@ -226,6 +278,9 @@ function mapPosToCue(pos, pen, style) {
 	};
 }
 
+/**
+ * @param {Json3} json
+ */
 function addCuesToTrack(track, json, stackProcess) {
 	const events = json.events || [];
 	const pens = json.pens || [];
@@ -278,7 +333,7 @@ function addCuesToTrack(track, json, stackProcess) {
 		const eventStyle = wsWinStyles[ev.wsWinStyleId];
 		const placement = mapPosToCue(pos, eventPen, eventStyle);
 
-		placement.line && (cue.line = rd(placement.line, 2));
+		cue.line = placement.line;
 		if (placement.position != null) {
 			cue.position = rd(placement.position, 2);
 		}
