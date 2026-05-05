@@ -32,21 +32,25 @@
  * @property {number} [ecEdgeColor]
  * @property {number} [szPenSize]
  * @property {number} [fsFontStyle]
- * @property {number} [bAttr]
- * @property {number} [iAttr]
- * @property {number} [uAttr]
+ * @property {number | undefined} [bAttr]
+ * @property {number | undefined} [iAttr]
+ * @property {number | undefined} [uAttr]
+ * @property {number | undefined} [hgHorizGroup]
  */
 
 /**
  * @typedef {Object} Json3WinPos
  * @property {number} apPoint
- * @property {number} ahHorPos
- * @property {number} avVerPos
+ * @property {number | undefined} ahHorPos
+ * @property {number | undefined} avVerPos
  */
 
 /**
  * @typedef {Object} Json3WinStyle
- * @property {number} [juJustifCode]
+ * @property {number | undefined} [mhModeHint]
+ * @property {number | undefined} [juJustifCode]
+ * @property {number | undefined} [pdPrintDir]
+ * @property {number | undefined} [sdScrollDir]
  */
 
 /**
@@ -194,6 +198,8 @@ function penToCss(pen) {
 		Number(pen.fsFontStyle ?? 0) === 7 ? "font-variant: small-caps;" : "";
 	const fontFamilyCss = !fontFamily ? "" : `font-family: ${fontFamily};`;
 
+	const packed = pen.hgHorizGroup ? "text-combine-upright: all;" : "";
+
 	return `
 				${i} ${fontVariant} ${b} ${u}
 				color: rgba(${c},${foreAlpha});
@@ -201,6 +207,7 @@ function penToCss(pen) {
 				${fontFamilyCss}
 				${fontSizeCss}
 				${textShadow}
+				${packed}
 			`
 		.replace(/\s+/g, " ")
 		.trim();
@@ -221,7 +228,7 @@ function generatePenStyles() {
 
 	const vRect = video?.getBoundingClientRect();
 	const fs = calculateBaseFontSize(vRect?.width, vRect?.height);
-	let style = `::cue(c) { font-family: ${defaultFont}; font-size: ${fs}px; ${isMWEB ? "font-weight: 500;" : ""} line-height: normal; }\n`;
+	let style = `::cue(c) { font-family: ${defaultFont}; font-size: ${fs}px;${isMWEB ? " font-weight: 500;" : ""} }\n`;
 	style += `::cue(.bg) { background: rgba(0,0,0,0.5); }\n\n`;
 
 	for (let i = 0; i < currentPens.length; i++) {
@@ -234,24 +241,31 @@ function generatePenStyles() {
 
 /** @param {Json3WinPos} pos @param {Json3Pen} pen @param {Json3WinStyle} style */
 function mapPosToCue(pos, pen, style) {
-	pos || (pos = { avVerPos: 95, ahHorPos: 5, apPoint: 6 });
+	pos || (pos = { avVerPos: 95, ahHorPos: 50, apPoint: 7 });
 
 	const anchorPoint = pos.apPoint;
 	const hasAnchor = anchorPoint != null;
 
-	let ver = pos.avVerPos * 0.96 + 2;
-	let hor = pos.ahHorPos * 0.96 + 2;
+	let ver = pos.avVerPos != null ? pos.avVerPos * 0.96 + 2 : 0;
+	let hor = pos.ahHorPos != null ? pos.ahHorPos * 0.96 + 2 : 50;
 
-	let position = hor;
+	const fontSizeIncrement = pen?.szPenSize ? pen.szPenSize / 100 - 1 : 0;
+	if (hasAnchor && [0, 3, 6].includes(anchorPoint)) {
+		hor = Math.max(hor / (1 + fontSizeIncrement * 2), 2);
+		console.log("Adjusted hor for left anchor:", hor);
+	}
+
 	let align = "";
 	let positionAlign = undefined;
 	let lineAlign = [0, 1, 2].includes(pos.apPoint) ? "" : "end";
+	let vertical = "";
 
 	switch (anchorPoint) {
 		case 0:
 		case 3:
 		case 6:
 			positionAlign = "line-left";
+			//hor == null && (position = 5);
 			break;
 		case 1:
 		case 4:
@@ -262,17 +276,13 @@ function mapPosToCue(pos, pen, style) {
 		case 5:
 		case 8:
 			positionAlign = "line-right";
+			//hor == null && (position = 100);
 			break;
-	}
-	
-		const fontSizeIncrement = pen?.szPenSize ? pen.szPenSize / 100 - 1 : 0;
-	if (hasAnchor && [0, 3, 6].includes(anchorPoint)) {
-		hor = Math.max(hor / (1 + fontSizeIncrement * 2), 2);
-		console.log("Adjusted hor for left anchor:", hor);
 	}
 
 	switch (style?.juJustifCode) {
 		case 0:
+			align = "left";
 			positionAlign = "line-left";
 			break;
 		case 1:
@@ -284,13 +294,22 @@ function mapPosToCue(pos, pen, style) {
 			positionAlign = "";
 	}
 
+	if (style?.pdPrintDir === 1 || style?.pdPrintDir === 2) {
+		lineAlign = "center";
+		positionAlign = "line-right";
+		vertical = style.pdPrintDir === 1 ? "rl" : "lr";
+
+		// swap ver <-> pos
+		[ver, hor] = [hor, ver];
+	}
+
 	return {
 		line: rd(ver, 2),
-		position: position,
+		position: hor,
 		align: align,
 		positionAlign: positionAlign, // Defaults to 'auto'
 		lineAlign: lineAlign, // Defaults to 'start' if unset
-		vertical: null,
+		vertical: vertical,
 	};
 }
 
@@ -337,9 +356,6 @@ function addCuesToTrack(track, json, stackProcess) {
 
 		if (parts.length === 3 && parts[1] == "\n") continue; // Skip empty cues from auto-gen
 
-		parts[1].startsWith(" ") || (parts[1] = " " + parts[1]);
-		parts[parts.length - 2].endsWith(" ") || (parts[parts.length - 2] += " ");
-
 		let cueText = parts.join("");
 		let cue = new VTTCue(start, end, cueText);
 		if (!ev.segs?.length) continue;
@@ -348,18 +364,19 @@ function addCuesToTrack(track, json, stackProcess) {
 		cue.snapToLines = false;
 
 		// Get position data for this event
-		const pos = wpWinPositions[ev.wpWinPosId];
-		const eventPen = pens[ev.pPenId];
-		const eventStyle = wsWinStyles[ev.wsWinStyleId];
+		const pos = wpWinPositions[ev.wpWinPosId ?? -1];
+		const eventPen = pens[ev.pPenId ?? -1];
+		const eventStyle = wsWinStyles[ev.wsWinStyleId ?? -1];
 		const placement = mapPosToCue(pos, eventPen, eventStyle);
 
-		cue.line = placement.line;
+		cue.line = placement?.line;
 		if (placement.position != null) {
 			cue.position = rd(placement.position, 2);
-		}
-		placement.align && (cue.align = placement.align);
-		placement.positionAlign && (cue.positionAlign = placement.positionAlign);
-		placement.lineAlign && (cue.lineAlign = placement.lineAlign);
+		} // @ts-ignore
+		placement.align && (cue.align = placement.align); // @ts-ignore
+		placement.positionAlign && (cue.positionAlign = placement.positionAlign); // @ts-ignore
+		placement.lineAlign && (cue.lineAlign = placement.lineAlign); // @ts-ignore
+		placement.vertical && (cue.vertical = placement.vertical);
 
 		track.addCue(cue);
 	}
