@@ -242,11 +242,6 @@ function mapPosToCue(pos, pen, style) {
 	let ver = pos.avVerPos * 0.96 + 2;
 	let hor = pos.ahHorPos * 0.96 + 2;
 
-	const fontSizeIncrement = pen?.szPenSize ? pen.szPenSize / 100 - 1 : 0;
-	if (hasAnchor && [0, 3, 6].includes(anchorPoint)) {
-		hor = Math.max(hor / (1 + fontSizeIncrement * 2), 2);
-		console.log("Adjusted hor for left anchor:", hor);
-	}
 	let position = hor;
 	let align = "";
 	let positionAlign = undefined;
@@ -268,6 +263,12 @@ function mapPosToCue(pos, pen, style) {
 		case 8:
 			positionAlign = "line-right";
 			break;
+	}
+	
+		const fontSizeIncrement = pen?.szPenSize ? pen.szPenSize / 100 - 1 : 0;
+	if (hasAnchor && [0, 3, 6].includes(anchorPoint)) {
+		hor = Math.max(hor / (1 + fontSizeIncrement * 2), 2);
+		console.log("Adjusted hor for left anchor:", hor);
 	}
 
 	switch (style?.juJustifCode) {
