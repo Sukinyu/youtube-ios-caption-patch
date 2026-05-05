@@ -266,6 +266,7 @@ function mapPosToCue(pos, pen, style) {
 		case 0:
 		case 3:
 		case 6:
+			align = "left"; // test
 			positionAlign = "line-left";
 			break;
 		case 1:
@@ -276,6 +277,7 @@ function mapPosToCue(pos, pen, style) {
 		case 2:
 		case 5:
 		case 8:
+			align = "right"; // test
 			positionAlign = "line-right";
 			break;
 	}
