@@ -36,12 +36,10 @@ function ts(ms, format = false) {
 	}
 	return ms / 1000;
 }
-function rgb(num) {
-	return `${(num >> 16) & 255},${(num >> 8) & 255},${num & 255}`;
-}
-function rd(num, decimals = 4) {
-	return +num.toFixed(decimals);
-}
+
+const rgb = (num) => `${(num >> 16) & 255},${(num >> 8) & 255},${num & 255}`;
+
+const rd = (num, decimals = 4) => +num.toFixed(decimals);
 
 function penFontFamily(pen) {
 	const fontFamily = pen.fsFontStyle;
@@ -146,6 +144,8 @@ function penToCss(pen) {
 		Number(pen.fsFontStyle ?? 0) === 7 ? "font-variant: small-caps;" : "";
 	const fontFamilyCss = !fontFamily ? "" : `font-family: ${fontFamily};`;
 
+	const packed = pen.hgHorizGroup ? "text-combine-upright: all;" : "";
+
 	return `
 				${i} ${fontVariant} ${b} ${u}
 				color: rgba(${c},${foreAlpha});
@@ -153,6 +153,7 @@ function penToCss(pen) {
 				${fontFamilyCss}
 				${fontSizeCss}
 				${textShadow}
+				${packed}
 			`
 		.replace(/\s+/g, " ")
 		.trim();
@@ -173,7 +174,7 @@ function generatePenStyles() {
 
 	const vRect = video?.getBoundingClientRect();
 	const fs = calculateBaseFontSize(vRect?.width, vRect?.height);
-	let style = `::cue(c) { font-family: ${defaultFont}; font-size: ${fs}px; ${isMWEB ? "font-weight: 500;" : ""} line-height: normal; }\n`;
+	let style = `::cue(c) { font-family: ${defaultFont}; font-size: ${fs}px;${isMWEB ? " font-weight: 500;" : ""} }\n`;
 	style += `::cue(.bg) { background: rgba(0,0,0,0.5); }\n\n`;
 
 	for (let i = 0; i < currentPens.length; i++) {
@@ -185,7 +186,7 @@ function generatePenStyles() {
 }
 
 function mapPosToCue(pos, pen, style) {
-	pos || (pos = { avVerPos: 95, ahHorPos: 5, apPoint: 6 });
+	pos || (pos = { avVerPos: 95, ahHorPos: 50, apPoint: 7 });
 
 	const anchorPoint = pos.apPoint;
 	const hasAnchor = anchorPoint != null;
@@ -202,12 +203,12 @@ function mapPosToCue(pos, pen, style) {
 	let align = "";
 	let positionAlign = undefined;
 	let lineAlign = [0, 1, 2].includes(pos.apPoint) ? "" : "end";
+	let vertical = "";
 
 	switch (anchorPoint) {
 		case 0:
 		case 3:
 		case 6:
-			align = "left";
 			positionAlign = "line-left";
 			break;
 		case 1:
@@ -218,13 +219,13 @@ function mapPosToCue(pos, pen, style) {
 		case 2:
 		case 5:
 		case 8:
-			align = "right";
 			positionAlign = "line-right";
 			break;
 	}
 
 	switch (style?.juJustifCode) {
 		case 0:
+			align = "left";
 			positionAlign = "line-left";
 			break;
 		case 1:
@@ -238,7 +239,7 @@ function mapPosToCue(pos, pen, style) {
 
 	return {
 		line: rd(ver, 2),
-		position: position,
+		position: rd(position, 2),
 		align: align,
 		positionAlign: positionAlign, // Defaults to 'auto'
 		lineAlign: lineAlign, // Defaults to 'start' if unset
@@ -276,7 +277,7 @@ function addCuesToTrack(track, json, stackProcess) {
 				parts.push(`<${ts(ev.tStartMs + seg.tOffsetMs, true)}>`); // Karaoke timing
 			}
 
-			const penId = seg.pPenId ? seg.pPenId : ev.pPenId;
+			const penId = seg.pPenId != null ? seg.pPenId : ev.pPenId;
 
 			parts.push(penId != null ? `<c.pen${penId}>` : `<c.bg>`);
 			parts.push(seg.utf8);
@@ -298,13 +299,14 @@ function addCuesToTrack(track, json, stackProcess) {
 		const eventStyle = wsWinStyles[ev.wsWinStyleId];
 		const placement = mapPosToCue(pos, eventPen, eventStyle);
 
-		cue.line = placement.line;
+		cue.line = placement?.line;
 		if (placement.position != null) {
 			cue.position = rd(placement.position, 2);
 		}
 		placement.align && (cue.align = placement.align);
 		placement.positionAlign && (cue.positionAlign = placement.positionAlign);
 		placement.lineAlign && (cue.lineAlign = placement.lineAlign);
+		placement.vertical && (cue.vertical = placement.vertical);
 
 		track.addCue(cue);
 	}
@@ -392,16 +394,18 @@ const po = new PerformanceObserver((list) => {
 				t.label.includes("Injected CC"),
 			);
 		if (!track) {
-			track = video?.addTextTrack("captions", "Injected CC", userLang);
+			video || (video = document.querySelector("video"));
+			track = video.addTextTrack(
+				"captions",
+				`Injected CC${translated ? " (TS)" : ""}`,
+				userLang,
+			);
 			track.mode = "showing";
 			console.log("Injected captions track");
 		} else {
 			if (track.cues) {
 				[...track.cues].forEach((cue) => track?.removeCue(cue)); // Clear existing cues
 			}
-		}
-		if (translated) {
-			track.label += " (TS)"; // short form of "Translated"
 		}
 		return track;
 	}

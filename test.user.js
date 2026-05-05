@@ -68,8 +68,6 @@ const defaultFont =
 	'"YouTube Noto", Roboto, Arial, Helvetica, Verdana, "PT Sans Caption", sans-serif';
 let currentPens = [];
 const isMWEB = window.location.host.startsWith("m.");
-let stateShowing = true;
-
 const inFullscreen = () => document["webkitIsFullScreen"];
 
 function calculateBaseFontSize(videoWidth, videoHeight) {
@@ -306,7 +304,7 @@ function mapPosToCue(pos, pen, style) {
 
 	return {
 		line: rd(ver, 2),
-		position: hor,
+		position: rd(hor, 2),
 		align: align,
 		positionAlign: positionAlign, // Defaults to 'auto'
 		lineAlign: lineAlign, // Defaults to 'start' if unset
