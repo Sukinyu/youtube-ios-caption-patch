@@ -11,17 +11,18 @@
  * @property {number} [tOffsetMs]
  * @property {number} [pPenId]
  */
-
 /**
  * @typedef {Object} Json3Event
  * @property {number} tStartMs
  * @property {number} dDurationMs
+ * @property {Json3Seg[]} segs
  * @property {number} [wpWinPosId]
  * @property {number} [wsWinStyleId]
  * @property {number} [pPenId]
- * @property {Json3Seg[]} segs
+ * @property {number} [id]
+ * @property {number} [wWinId]
+ * @property {number} [aAppend]
  */
-
 /**
  * @typedef {Object} Json3Pen
  * @property {number} [fcForeColor]
@@ -32,40 +33,43 @@
  * @property {number} [ecEdgeColor]
  * @property {number} [szPenSize]
  * @property {number} [fsFontStyle]
- * @property {number | undefined} [bAttr]
- * @property {number | undefined} [iAttr]
- * @property {number | undefined} [uAttr]
- * @property {number | undefined} [hgHorizGroup]
+ * @property {number} [bAttr]
+ * @property {number} [iAttr]
+ * @property {number} [uAttr]
+ * @property {number} [hgHorizGroup]
  */
-
 /**
  * @typedef {Object} Json3WinPos
  * @property {number} apPoint
- * @property {number | undefined} ahHorPos
- * @property {number | undefined} avVerPos
+ * @property {number} [ahHorPos]
+ * @property {number} [avVerPos]
+ * @property {number} [ccCols]
+ * @property {number} [rcRows]
  */
-
 /**
  * @typedef {Object} Json3WinStyle
- * @property {number | undefined} [mhModeHint]
- * @property {number | undefined} [juJustifCode]
- * @property {number | undefined} [pdPrintDir]
- * @property {number | undefined} [sdScrollDir]
+ * @property {number} [mhModeHint]
+ * @property {number} [juJustifCode]
+ * @property {number} [pdPrintDir]
+ * @property {number} [sdScrollDir]
  */
-
 /**
  * @typedef {Object} Json3
  * @property {Json3Event[]} events
- * @property {Json3Pen[]} pens
+ * @property {Json3Pen[]} [pens]
  * @property {Json3WinPos[]} wpWinPositions
  * @property {Json3WinStyle[]} wsWinStyles
  */
+
 const injectedUrls = new Set();
-const video = document.querySelector("video");
+/** @type {HTMLVideoElement | null} */
+let video = document.querySelector("video");
 const defaultFont =
 	'"YouTube Noto", Roboto, Arial, Helvetica, Verdana, "PT Sans Caption", sans-serif';
 let currentPens = [];
 const isMWEB = window.location.host.startsWith("m.");
+
+const inFullscreen = () => document["webkitIsFullScreen"];
 
 function calculateBaseFontSize(videoWidth, videoHeight) {
 	let baseSize = (videoHeight / 360) * 16;
@@ -87,12 +91,10 @@ function ts(ms, format = false) {
 	}
 	return ms / 1000;
 }
-function rgb(num) {
-	return `${(num >> 16) & 255},${(num >> 8) & 255},${num & 255}`;
-}
-function rd(num, decimals = 4) {
-	return +num.toFixed(decimals);
-}
+
+const rgb = (num) => `${(num >> 16) & 255},${(num >> 8) & 255},${num & 255}`;
+
+const rd = (num, decimals = 4) => +num.toFixed(decimals);
 
 function penFontFamily(pen) {
 	const fontFamily = pen.fsFontStyle;
@@ -265,7 +267,6 @@ function mapPosToCue(pos, pen, style) {
 		case 3:
 		case 6:
 			positionAlign = "line-left";
-			//hor == null && (position = 5);
 			break;
 		case 1:
 		case 4:
@@ -276,7 +277,6 @@ function mapPosToCue(pos, pen, style) {
 		case 5:
 		case 8:
 			positionAlign = "line-right";
-			//hor == null && (position = 100);
 			break;
 	}
 
@@ -331,13 +331,45 @@ function addCuesToTrack(track, json, stackProcess) {
 	const style = generatePenStyles();
 	if (style) setCaptionStyle(style);
 
+	const win = [];
+
 	// ---------- build cues ----------
 	for (const ev of events) {
-		if (!ev.segs || !ev.segs.length) continue; // Skip events without segments
 		const start = Number(ts(ev.tStartMs));
 		const end = Number(ts(ev.tStartMs + (ev.dDurationMs || 0)));
+
+		if (!ev.segs && ev?.id) {
+			// Handle events with no segments but have an ID (possible metadata or positioning cues)
+			let container = {
+				start: start,
+				end: end,
+				id: ev.id,
+				posId: ev.wpWinPosId,
+				styleId: ev.wsWinStyleId,
+			};
+			win.push(container);
+			continue;
+		}
+
 		/** @type {String[]} */
 		const parts = [];
+
+		if (ev.wWinId != null) {
+			let current; // Search for the corresponding window definition
+			for (current = 0; current <= win.length; current++) {
+				if (
+					win[current].id === ev.wWinId &&
+					win[current].start <= start &&
+					win[current].end >= end
+				) {
+					break;
+				}
+			}
+			const winData = win[current] || {};
+			ev.wpWinPosId ??= winData.posId;
+			ev.pPenId ??= winData.penId;
+			ev.wsWinStyleId ??= winData.styleId;
+		}
 
 		ev.segs.forEach((seg) => {
 			if (!seg.utf8.length) return;
@@ -347,7 +379,7 @@ function addCuesToTrack(track, json, stackProcess) {
 				parts.push(`<${ts(ev.tStartMs + seg.tOffsetMs, true)}>`); // Karaoke timing
 			}
 
-			const penId = seg.pPenId ? seg.pPenId : ev.pPenId;
+			const penId = seg.pPenId != null ? seg.pPenId : ev.pPenId;
 
 			parts.push(penId != null ? `<c.pen${penId}>` : `<c.bg>`);
 			parts.push(seg.utf8);
@@ -364,18 +396,18 @@ function addCuesToTrack(track, json, stackProcess) {
 		cue.snapToLines = false;
 
 		// Get position data for this event
-		const pos = wpWinPositions[ev.wpWinPosId ?? -1];
-		const eventPen = pens[ev.pPenId ?? -1];
-		const eventStyle = wsWinStyles[ev.wsWinStyleId ?? -1];
+		const pos = wpWinPositions[ev.wpWinPosId ?? -1],
+			eventPen = pens[ev.pPenId ?? -1],
+			eventStyle = wsWinStyles[ev.wsWinStyleId ?? -1];
 		const placement = mapPosToCue(pos, eventPen, eventStyle);
 
 		cue.line = placement?.line;
 		if (placement.position != null) {
 			cue.position = rd(placement.position, 2);
-		} // @ts-ignore
-		placement.align && (cue.align = placement.align); // @ts-ignore
-		placement.positionAlign && (cue.positionAlign = placement.positionAlign); // @ts-ignore
-		placement.lineAlign && (cue.lineAlign = placement.lineAlign); // @ts-ignore
+		}
+		placement.align && (cue.align = placement.align);
+		placement.positionAlign && (cue.positionAlign = placement.positionAlign);
+		placement.lineAlign && (cue.lineAlign = placement.lineAlign);
 		placement.vertical && (cue.vertical = placement.vertical);
 
 		track.addCue(cue);
@@ -464,7 +496,8 @@ const po = new PerformanceObserver((list) => {
 				t.label.includes("Injected CC"),
 			);
 		if (!track) {
-			track = video?.addTextTrack("captions", "Injected CC", userLang);
+			video || (video = document.querySelector("video"));
+			track = video.addTextTrack("captions", "Injected CC", userLang);
 			track.mode = "showing";
 			console.log("Injected captions track");
 		} else {
