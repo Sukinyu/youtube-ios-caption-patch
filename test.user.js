@@ -68,6 +68,7 @@ const defaultFont =
 	'"YouTube Noto", Roboto, Arial, Helvetica, Verdana, "PT Sans Caption", sans-serif';
 let currentPens = [];
 const isMWEB = window.location.host.startsWith("m.");
+let stateShowing = true;
 
 const inFullscreen = () => document["webkitIsFullScreen"];
 
@@ -497,16 +498,17 @@ const po = new PerformanceObserver((list) => {
 			);
 		if (!track) {
 			video || (video = document.querySelector("video"));
-			track = video.addTextTrack("captions", "Injected CC", userLang);
+			track = video.addTextTrack(
+				"captions",
+				`Injected CC${translated ? " (TS)" : ""}`,
+				userLang,
+			);
 			track.mode = "showing";
 			console.log("Injected captions track");
 		} else {
 			if (track.cues) {
 				[...track.cues].forEach((cue) => track?.removeCue(cue)); // Clear existing cues
 			}
-		}
-		if (translated) {
-			track.label += " (TS)"; // short form of "Translated"
 		}
 		return track;
 	}
@@ -546,3 +548,11 @@ if (video.src) {
 		} // Refresh
 	}).observe(video, { attributeFilter: ["src"] });
 }
+
+video.onwebkitfullscreenchange = () => {
+	if (inFullscreen) {
+		video?.textTracks[0] && (video.textTracks[0].mode = "showing");
+	} else {
+		video?.textTracks[0] && (video.textTracks[0].mode = "hidden");
+	}
+};
