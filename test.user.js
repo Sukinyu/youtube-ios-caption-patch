@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         MWeb Youtube Captions Patch (dev)
 // @author       Sukinyu
-// @version			 2
+// @version      3
 // @match        https://m.youtube.com/*
 // @updateURL    https://github.com/Sukinyu/youtube-ios-caption-patch/raw/refs/heads/main/test.user.js
 // @downloadURL  https://github.com/Sukinyu/youtube-ios-caption-patch/raw/refs/heads/main/test.user.js
@@ -266,7 +266,7 @@ function mapPosToCue(pos, pen, style) {
 		case 0:
 		case 3:
 		case 6:
-			align = "left"; // test
+			//align = "left"; // test
 			positionAlign = "line-left";
 			break;
 		case 1:
@@ -277,7 +277,7 @@ function mapPosToCue(pos, pen, style) {
 		case 2:
 		case 5:
 		case 8:
-			align = "right"; // test
+			//align = "right"; // test
 			positionAlign = "line-right";
 			break;
 	}
@@ -550,6 +550,7 @@ if (video.src) {
 	}).observe(video, { attributeFilter: ["src"] });
 }
 
+/*
 video.onwebkitfullscreenchange = () => {
 	if (inFullscreen) {
 		video?.textTracks[0] && (video.textTracks[0].mode = "showing");
@@ -557,3 +558,4 @@ video.onwebkitfullscreenchange = () => {
 		video?.textTracks[0] && (video.textTracks[0].mode = "hidden");
 	}
 };
+*/
