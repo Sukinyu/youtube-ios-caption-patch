@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         MWeb Youtube Captions Patch (dev)
 // @author       Sukinyu
-// @version      3
+// @version      4
 // @match        https://m.youtube.com/*
 // @updateURL    https://github.com/Sukinyu/youtube-ios-caption-patch/raw/refs/heads/main/test.user.js
 // @downloadURL  https://github.com/Sukinyu/youtube-ios-caption-patch/raw/refs/heads/main/test.user.js
@@ -259,7 +259,7 @@ function mapPosToCue(pos, pen, style) {
 
 	let align = "";
 	let positionAlign = undefined;
-	let lineAlign = [0, 1, 2].includes(pos.apPoint) ? "" : "end";
+	let lineAlign = undefined;
 	let vertical = "";
 
 	switch (anchorPoint) {
@@ -269,16 +269,24 @@ function mapPosToCue(pos, pen, style) {
 			//align = "left"; // test
 			positionAlign = "line-left";
 			break;
-		case 1:
-		case 4:
-		case 7:
-			lineAlign = "center";
-			break;
 		case 2:
 		case 5:
 		case 8:
 			//align = "right"; // test
 			positionAlign = "line-right";
+			break;
+	}
+
+	switch (anchorPoint) {
+		case 3:
+		case 4:
+		case 5:
+			lineAlign = "center";
+			break;
+		case 6:
+		case 7:
+		case 8:
+			lineAlign = "end";
 			break;
 	}
 
@@ -307,11 +315,11 @@ function mapPosToCue(pos, pen, style) {
 
 	return {
 		line: rd(ver, 2),
-		position: rd(hor, 2),
-		align: align,
+		position: rd(hor, 2), // defaults to 'auto'
+		align: align, // defaults to 'center'
 		positionAlign: positionAlign, // Defaults to 'auto'
-		lineAlign: lineAlign, // Defaults to 'start' if unset
-		vertical: vertical,
+		lineAlign: lineAlign, // Defaults to 'start'
+		vertical: vertical, // defaults to none
 	};
 }
 
