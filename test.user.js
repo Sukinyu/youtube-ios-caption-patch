@@ -63,6 +63,7 @@
  */
 
 // Start of debug code
+/*
 function getActiveCues(track) {
 	return [...(track.cues || [])];
 }
@@ -310,6 +311,7 @@ function buildCueList(track) {
 
 	document.body.appendChild(panel);
 }
+*/
 // #End of debug code
 
 const injectedUrls = new Set();
@@ -508,6 +510,7 @@ function mapPosToCue(pos, pen, style) {
 	}
 
 	let align = "";
+	let size = null;
 	let positionAlign = undefined;
 	let lineAlign = undefined;
 	let vertical = "";
@@ -518,12 +521,14 @@ function mapPosToCue(pos, pen, style) {
 		case 6:
 			//align = "left"; // test
 			positionAlign = "line-left";
+			size = 20;
 			break;
 		case 2:
 		case 5:
 		case 8:
 			//align = "right"; // test
 			positionAlign = "line-right";
+			size = 20;
 			break;
 	}
 
@@ -567,6 +572,7 @@ function mapPosToCue(pos, pen, style) {
 		line: rd(ver, 2),
 		position: rd(hor, 2), // defaults to 'auto'
 		align: align, // defaults to 'center'
+		size: size, // defaults to 100, iOS has a bug when posAlign mismatches align
 		positionAlign: positionAlign, // Defaults to 'auto'
 		lineAlign: lineAlign, // Defaults to 'start'
 		vertical: vertical, // defaults to none
@@ -669,6 +675,7 @@ function addCuesToTrack(track, json, stackProcess) {
 		placement.positionAlign && (cue.positionAlign = placement.positionAlign);
 		placement.lineAlign && (cue.lineAlign = placement.lineAlign);
 		placement.vertical && (cue.vertical = placement.vertical);
+		placement.size && (cue.size = placement.size);
 
 		track.addCue(cue);
 	}
@@ -694,6 +701,7 @@ function addCuesToTrack(track, json, stackProcess) {
 			merged.line = c1.line;
 			merged.position = c1.position;
 			merged.align = c1.align;
+			merged.size = c1.size;
 			merged.positionAlign = c1.positionAlign;
 			merged.lineAlign = c1.lineAlign;
 			track.addCue(merged);
@@ -785,7 +793,7 @@ const po = new PerformanceObserver((list) => {
 	tryFetch("json3")
 		.then((json) => {
 			addCuesToTrack(track, parseJson3(json), isAutoGen);
-			buildCueList(track);
+			//buildCueList(track); debug code
 		})
 		.catch((err) => alert(`Error adding captions: ${err}\n${err.stack}`));
 });
