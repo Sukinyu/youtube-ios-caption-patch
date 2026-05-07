@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         MWeb Youtube Captions Patch (dev)
 // @author       Sukinyu
-// @version      6
+// @version      7
 // @match        https://m.youtube.com/*
 // @updateURL    https://github.com/Sukinyu/youtube-ios-caption-patch/raw/refs/heads/main/test.user.js
 // @downloadURL  https://github.com/Sukinyu/youtube-ios-caption-patch/raw/refs/heads/main/test.user.js
@@ -62,26 +62,228 @@
  * @property {Json3WinStyle[]} wsWinStyles
  */
 
-const dbg = document.createElement("div");
-dbg.style.cssText = `
-position:fixed;
-bottom:0;
-left:0;
-z-index:999999;
-max-width:300px;
-max-height:200px;
-overflow:auto;
-background:rgba(0,0,0,0.8);
-color:#0f0;
-font-size:12px;
-padding:6px;
-text-wrap: stable;
-`;
-document.body.appendChild(dbg);
+// Start of debug code
+function getActiveCues(track) {
+	return [...(track.cues || [])];
+}
+function openEditor(cue) {
+	const editor = document.createElement("div");
 
-var dlog = (...args) => {
-	dbg.innerText += args.join(" ") + "\n";
-};
+	Object.assign(editor.style, {
+		position: "fixed",
+		left: "0",
+		bottom: "0",
+		width: "340px",
+		maxHeight: "60vh",
+		overflow: "auto",
+		background: "#111",
+		color: "white",
+		zIndex: 1000000,
+		padding: "10px",
+		fontSize: "12px",
+		fontFamily: "monospace",
+	});
+
+	function slider(label, min, max, step, getter, setter) {
+		const wrap = document.createElement("div");
+
+		const text = document.createElement("span");
+		text.textContent = label + ": ";
+
+		const input = document.createElement("input");
+		input.type = "range";
+		input.min = min;
+		input.max = max;
+		input.step = step;
+		input.value = getter() ?? 0;
+
+		input.oninput = () => {
+			setter(parseFloat(input.value));
+			console.log("cue updated:", cue);
+		};
+
+		wrap.appendChild(text);
+		wrap.appendChild(input);
+		return wrap;
+	}
+
+	function dropdown(label, options, getter, setter) {
+		const wrap = document.createElement("div");
+
+		const text = document.createElement("span");
+		text.textContent = label + ": ";
+
+		const select = document.createElement("select");
+
+		options.forEach((opt) => {
+			const o = document.createElement("option");
+			o.value = opt;
+			o.textContent = opt;
+			select.appendChild(o);
+		});
+
+		select.value = getter() ?? options[0];
+
+		select.onchange = () => {
+			setter(select.value);
+			console.log("cue updated:", cue);
+		};
+
+		wrap.appendChild(text);
+		wrap.appendChild(select);
+		return wrap;
+	}
+
+	function checkbox(label, getter, setter) {
+		const wrap = document.createElement("div");
+
+		const input = document.createElement("input");
+		input.type = "checkbox";
+		input.checked = !!getter();
+
+		const text = document.createElement("span");
+		text.textContent = " " + label;
+
+		input.onchange = () => {
+			setter(input.checked);
+			console.log("cue updated:", cue);
+		};
+
+		wrap.appendChild(input);
+		wrap.appendChild(text);
+		return wrap;
+	}
+
+	function textEditor() {
+		const wrap = document.createElement("div");
+
+		const ta = document.createElement("textarea");
+		ta.value = cue.text || "";
+		ta.style.width = "100%";
+		ta.style.height = "80px";
+
+		ta.oninput = () => {
+			cue.text = ta.value;
+		};
+
+		wrap.appendChild(document.createTextNode("text:"));
+		wrap.appendChild(ta);
+
+		return wrap;
+	}
+
+	// --- Positioning ---
+	editor.appendChild(
+		slider(
+			"line",
+			0,
+			100,
+			0.1,
+			() => cue.line,
+			(v) => (cue.line = v),
+		),
+	);
+
+	editor.appendChild(
+		slider(
+			"position",
+			0,
+			100,
+			0.1,
+			() => cue.position,
+			(v) => (cue.position = v),
+		),
+	);
+
+	editor.appendChild(
+		slider(
+			"size",
+			0,
+			100,
+			1,
+			() => cue.size ?? 100,
+			(v) => (cue.size = v),
+		),
+	);
+
+	// --- Alignment (THIS is your current bug source) ---
+	editor.appendChild(
+		dropdown(
+			"align",
+			["start", "center", "end", "left", "right"],
+			() => cue.align,
+			(v) => (cue.align = v),
+		),
+	);
+
+	editor.appendChild(
+		dropdown(
+			"positionAlign",
+			["auto", "line-left", "center", "line-right"],
+			() => cue.positionAlign,
+			(v) => (cue.positionAlign = v),
+		),
+	);
+
+	editor.appendChild(
+		dropdown(
+			"lineAlign",
+			["auto", "start", "center", "end"],
+			() => cue.lineAlign,
+			(v) => (cue.lineAlign = v),
+		),
+	);
+
+	// --- Behavior flags ---
+	editor.appendChild(
+		checkbox(
+			"snapToLines",
+			() => cue.snapToLines,
+			(v) => (cue.snapToLines = v),
+		),
+	);
+
+	// --- Text editing ---
+	editor.appendChild(textEditor());
+
+	document.body.appendChild(editor);
+}
+function buildCueList(track) {
+	const panel = document.createElement("div");
+	panel.style.cssText = `
+        position:fixed;
+        right:0;
+        top:0;
+        width:300px;
+        max-height:100vh;
+        overflow:auto;
+        background:rgba(0,0,0,0.8);
+        color:white;
+        font-size:12px;
+        z-index:999999;
+    `;
+
+	const cues = getActiveCues(track);
+
+	cues.forEach((cue, i) => {
+		const btn = document.createElement("button");
+		btn.textContent = `Cue ${i} [${cue.startTime.toFixed(1)}s]`;
+
+		btn.style.cssText = `
+            display:block;
+            width:100%;
+            text-align:left;
+            margin:2px 0;
+        `;
+
+		btn.onclick = () => openEditor(cue);
+
+		panel.appendChild(btn);
+	});
+
+	document.body.appendChild(panel);
+}
+// #End of debug code
 
 try {
 	const injectedUrls = new Set();
@@ -280,7 +482,7 @@ try {
 		const fontSizeIncrement = pen?.szPenSize ? pen.szPenSize / 100 - 1 : 0;
 		if (hasAnchor && [0, 3, 6].includes(anchorPoint)) {
 			hor = Math.max(hor / (1 + fontSizeIncrement * 2), 2);
-			dlog("Adjusted hor for left anchor:", hor);
+			console.log("Adjusted hor for left anchor:", hor);
 		}
 
 		let align = "";
@@ -446,17 +648,6 @@ try {
 			placement.lineAlign && (cue.lineAlign = placement.lineAlign);
 			placement.vertical && (cue.vertical = placement.vertical);
 
-			dlog(
-				"MAPPED",
-				JSON.stringify({
-					line: cue.line,
-					position: cue.position,
-					align: cue.align,
-					positionAlign: cue.positionAlign,
-					lineAlign: cue.lineAlign,
-					vertical: cue.vertical,
-				}),
-			);
 			track.addCue(cue);
 		}
 		if (!stackProcess) return;
@@ -508,7 +699,7 @@ try {
 		const url = entries[entries.length - 1].name;
 		if (!url.includes("/api/timedtext") || injectedUrls.has(url)) return;
 		injectedUrls.add(url);
-		dlog("Caption request detected:", url);
+		console.log("Caption request detected:", url);
 		let newURL = new URL(url);
 		const removeParams = [
 			"potc",
@@ -550,7 +741,7 @@ try {
 					userLang,
 				);
 				track.mode = "showing";
-				dlog("Injected captions track");
+				console.log("Injected captions track");
 			} else {
 				if (track.cues) {
 					[...track.cues].forEach((cue) => track?.removeCue(cue)); // Clear existing cues
@@ -570,7 +761,10 @@ try {
 
 		let track = createTrack();
 		tryFetch("json3")
-			.then((json) => addCuesToTrack(track, parseJson3(json), isAutoGen))
+			.then((json) => {
+				addCuesToTrack(track, parseJson3(json), isAutoGen);
+				buildCueList(track);
+			})
 			.catch((err) => alert(`Error adding captions: ${err}\n${err.stack}`));
 	});
 
@@ -584,7 +778,7 @@ try {
 
 	window.onresize = () => updateCaptionStyles();
 
-	if (video.src) {
+	if (video?.src) {
 		new MutationObserver(() => {
 			const track = video?.textTracks[0];
 			[...track.cues].forEach((cue) => track?.removeCue(cue));
