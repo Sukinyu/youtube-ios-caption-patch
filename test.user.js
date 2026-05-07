@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         MWeb Youtube Captions Patch (dev)
 // @author       Sukinyu
-// @version      4
+// @version      5
 // @match        https://m.youtube.com/*
 // @updateURL    https://github.com/Sukinyu/youtube-ios-caption-patch/raw/refs/heads/main/test.user.js
 // @downloadURL  https://github.com/Sukinyu/youtube-ios-caption-patch/raw/refs/heads/main/test.user.js
@@ -61,6 +61,26 @@
  * @property {Json3WinPos[]} wpWinPositions
  * @property {Json3WinStyle[]} wsWinStyles
  */
+
+const dbg = document.createElement("div");
+dbg.style.cssText = `
+position:fixed;
+bottom:0;
+left:0;
+z-index:999999;
+max-width:300px;
+max-height:200px;
+overflow:auto;
+background:rgba(0,0,0,0.8);
+color:#0f0;
+font-size:12px;
+padding:6px;
+`;
+document.body.appendChild(dbg);
+
+var dlog = (...args) => {
+	dbg.innerText += args.join(" ") + "\n";
+};
 
 const injectedUrls = new Set();
 /** @type {HTMLVideoElement | null} */
@@ -254,7 +274,7 @@ function mapPosToCue(pos, pen, style) {
 	const fontSizeIncrement = pen?.szPenSize ? pen.szPenSize / 100 - 1 : 0;
 	if (hasAnchor && [0, 3, 6].includes(anchorPoint)) {
 		hor = Math.max(hor / (1 + fontSizeIncrement * 2), 2);
-		console.log("Adjusted hor for left anchor:", hor);
+		dlog("Adjusted hor for left anchor:", hor);
 	}
 
 	let align = "";
@@ -420,6 +440,14 @@ function addCuesToTrack(track, json, stackProcess) {
 		placement.lineAlign && (cue.lineAlign = placement.lineAlign);
 		placement.vertical && (cue.vertical = placement.vertical);
 
+		dlog("MAPPED", JSON.stringify({
+			line: placement.line,
+			position: placement.position,
+			align: placement.align,
+			positionAlign: placement.positionAlign,
+			lineAlign: placement.lineAlign,
+			vertical: placement.vertical,
+		}));
 		track.addCue(cue);
 	}
 	if (!stackProcess) return;
@@ -471,7 +499,7 @@ const po = new PerformanceObserver((list) => {
 	const url = entries[entries.length - 1].name;
 	if (!url.includes("/api/timedtext") || injectedUrls.has(url)) return;
 	injectedUrls.add(url);
-	console.log("Caption request detected:", url);
+	dlog("Caption request detected:", url);
 	let newURL = new URL(url);
 	const removeParams = [
 		"potc",
@@ -513,7 +541,7 @@ const po = new PerformanceObserver((list) => {
 				userLang,
 			);
 			track.mode = "showing";
-			console.log("Injected captions track");
+			dlog("Injected captions track");
 		} else {
 			if (track.cues) {
 				[...track.cues].forEach((cue) => track?.removeCue(cue)); // Clear existing cues
