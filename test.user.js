@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         MWeb Youtube Captions Patch (dev)
 // @author       Sukinyu
-// @version      12
+// @version      13
 // @match        https://m.youtube.com/*
 // @updateURL    https://github.com/Sukinyu/youtube-ios-caption-patch/raw/refs/heads/main/test.user.js
 // @downloadURL  https://github.com/Sukinyu/youtube-ios-caption-patch/raw/refs/heads/main/test.user.js
@@ -567,7 +567,11 @@ function mapPosToCue(pos, pen, style, rawText = "", baseFontSize = 16) {
 
 	if (!align && positionAlign) {
 		const vWidth = video?.getBoundingClientRect()?.width || 1;
-		size = ((baseFontSize * 0.7808 * rawText.length) / vWidth) * 100;
+		rawText.split("\n").forEach((line) => {
+			const lineWidth = line.length * baseFontSize * 0.7808;
+			lineWidth > size && (size = lineWidth);
+		});
+		size = (size || 100 / vWidth) * 100;
 		size = Math.min(rd(size), 100);
 	}
 
