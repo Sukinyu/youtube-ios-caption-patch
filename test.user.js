@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         MWeb Youtube Captions Patch (dev)
 // @author       Sukinyu
-// @version      8
+// @version      9
 // @match        https://m.youtube.com/*
 // @updateURL    https://github.com/Sukinyu/youtube-ios-caption-patch/raw/refs/heads/main/test.user.js
 // @downloadURL  https://github.com/Sukinyu/youtube-ios-caption-patch/raw/refs/heads/main/test.user.js
@@ -63,7 +63,7 @@
  */
 
 // Start of debug code
-/*
+
 function getActiveCues(track) {
 	return [...(track.cues || [])];
 }
@@ -311,7 +311,7 @@ function buildCueList(track) {
 
 	document.body.appendChild(panel);
 }
-*/
+
 // #End of debug code
 
 const injectedUrls = new Set();
@@ -521,14 +521,12 @@ function mapPosToCue(pos, pen, style) {
 		case 6:
 			//align = "left"; // test
 			positionAlign = "line-left";
-			size = 20;
 			break;
 		case 2:
 		case 5:
 		case 8:
 			//align = "right"; // test
 			positionAlign = "line-right";
-			size = 20;
 			break;
 	}
 
@@ -566,6 +564,10 @@ function mapPosToCue(pos, pen, style) {
 
 		// swap ver <-> pos
 		[ver, hor] = [hor, ver];
+	}
+
+	if (align != positionAlign?.replace("line-", "")) {
+		size = 20;
 	}
 
 	return {
@@ -793,7 +795,7 @@ const po = new PerformanceObserver((list) => {
 	tryFetch("json3")
 		.then((json) => {
 			addCuesToTrack(track, parseJson3(json), isAutoGen);
-			//buildCueList(track); debug code
+			buildCueList(track); // debug code
 		})
 		.catch((err) => alert(`Error adding captions: ${err}\n${err.stack}`));
 });
