@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         MWeb Youtube Captions Patch (dev)
 // @author       Sukinyu
-// @version      11
+// @version      12
 // @match        https://m.youtube.com/*
 // @updateURL    https://github.com/Sukinyu/youtube-ios-caption-patch/raw/refs/heads/main/test.user.js
 // @downloadURL  https://github.com/Sukinyu/youtube-ios-caption-patch/raw/refs/heads/main/test.user.js
@@ -493,7 +493,7 @@ function generatePenStyles() {
 }
 
 /** @param {Json3WinPos} pos @param {Json3Pen} pen @param {Json3WinStyle} style */
-function mapPosToCue(pos, pen, style) {
+function mapPosToCue(pos, pen, style, rawText = "", baseFontSize = 16) {
 	pos || (pos = { avVerPos: 95, ahHorPos: 50, apPoint: 7 });
 
 	const anchorPoint = pos.apPoint;
@@ -565,8 +565,10 @@ function mapPosToCue(pos, pen, style) {
 		[ver, hor] = [hor, ver];
 	}
 
-	if ( !align && positionAlign) {
-		size = 20;
+	if (!align && positionAlign) {
+		const vWidth = video?.getBoundingClientRect()?.width || 1;
+		size = ((baseFontSize * 0.7808 * rawText.length) / vWidth) * 100;
+		size = Math.min(rd(size), 100);
 	}
 
 	return {
@@ -662,11 +664,13 @@ function addCuesToTrack(track, json, stackProcess) {
 
 		cue.snapToLines = false;
 
+		const rawText = ev.segs?.map((s) => s.utf8).join("") || "";
+
 		// Get position data for this event
 		const pos = wpWinPositions[ev.wpWinPosId ?? -1],
 			eventPen = pens[ev.pPenId ?? -1],
 			eventStyle = wsWinStyles[ev.wsWinStyleId ?? -1];
-		const placement = mapPosToCue(pos, eventPen, eventStyle);
+		const placement = mapPosToCue(pos, eventPen, eventStyle, rawText);
 
 		cue.line = placement?.line;
 		if (placement.position != null) {
