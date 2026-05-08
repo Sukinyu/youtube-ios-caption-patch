@@ -499,7 +499,7 @@ function generatePenStyles() {
 
 /** @param {Json3WinPos} pos @param {Json3Pen} pen @param {Json3WinStyle} style */
 function mapPosToCue(pos, pen, style) {
-	pos || (pos = { avVerPos: 95, ahHorPos: 20, apPoint: 7 });
+	pos || (pos = { avVerPos: 95, ahHorPos: 50, apPoint: 7 });
 
 	const anchorPoint = pos.apPoint;
 	const hasAnchor = anchorPoint != null;
@@ -840,7 +840,7 @@ function createCaptionEditorButton(openEditor) {
 	btn.style.zIndex = "999999";
 	btn.style.padding = "10px 14px";
 	btn.style.border = "none";
-	btn.style.borderRadius = "10px";
+	btn.style.borderRadius = "10px";50
 	btn.style.background = "rgba(20,20,20,0.85)";
 	btn.style.color = "white";
 	btn.style.fontSize = "14px";

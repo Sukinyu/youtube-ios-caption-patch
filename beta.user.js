@@ -189,7 +189,7 @@ function generatePenStyles() {
 }
 
 function mapPosToCue(pos, pen, style) {
-	pos || (pos = { avVerPos: 95, ahHorPos: 20, apPoint: 7 });
+	pos || (pos = { avVerPos: 95, ahHorPos: 50, apPoint: 7 });
 
 	const anchorPoint = pos.apPoint;
 	const hasAnchor = anchorPoint != null;
