@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         MWeb Youtube Captions Patch (dev)
 // @author       Sukinyu
-// @version      15
+// @version      16
 // @match        https://m.youtube.com/*
 // @updateURL    https://github.com/Sukinyu/youtube-ios-caption-patch/raw/refs/heads/main/test.user.js
 // @downloadURL  https://github.com/Sukinyu/youtube-ios-caption-patch/raw/refs/heads/main/test.user.js
@@ -402,6 +402,9 @@ function penToCss(pen) {
 	const cB = rgb(pen.bcBackColor ?? 0);
 	const backAlpha = rd(pen.boBackAlpha != null ? pen.boBackAlpha / 255 : 0.5);
 
+	colorCss =
+		c != "0,0,0" || foreAlpha != 1 ? `color: rgba(${c},${foreAlpha});` : "";
+
 	const backgroundCss =
 		backAlpha != 0 ? `background: rgba(${cB},${backAlpha});` : "";
 
@@ -455,7 +458,7 @@ function penToCss(pen) {
 
 	return `
 				${i} ${fontVariant} ${b} ${u}
-				color: rgba(${c},${foreAlpha});
+				${colorCss}
 				${backgroundCss}
 				${fontFamilyCss}
 				${fontSizeCss}
@@ -481,7 +484,7 @@ function generatePenStyles() {
 
 	const vRect = video?.getBoundingClientRect();
 	const fs = calculateBaseFontSize(vRect?.width, vRect?.height);
-	let style = `::cue(c) { font-family: ${defaultFont}; font-size: ${fs}px;${isMWEB ? " font-weight: 500;" : ""} }\n`;
+	let style = `::cue(c) { font-family: ${defaultFont}; font-size: ${fs}px; line-height: normal;${isMWEB ? " font-weight: 500;" : ""}}\n`;
 	style += `::cue(.bg) { background: rgba(0,0,0,0.5); }\n\n`;
 
 	for (let i = 0; i < currentPens.length; i++) {
@@ -493,8 +496,8 @@ function generatePenStyles() {
 }
 
 /** @param {Json3WinPos} pos @param {Json3Pen} pen @param {Json3WinStyle} style */
-function mapPosToCue(pos, pen, style, rawText = "", baseFontSize = 16) {
-	pos || (pos = { avVerPos: 95, ahHorPos: 50, apPoint: 7 });
+function mapPosToCue(pos, pen, style) {
+	pos || (pos = { avVerPos: 95, ahHorPos: 20, apPoint: 7 });
 
 	const anchorPoint = pos.apPoint;
 	const hasAnchor = anchorPoint != null;
@@ -509,7 +512,6 @@ function mapPosToCue(pos, pen, style, rawText = "", baseFontSize = 16) {
 	}
 
 	let align = "";
-	let size = null;
 	let positionAlign = "";
 	let lineAlign = undefined;
 	let vertical = "";
@@ -518,13 +520,13 @@ function mapPosToCue(pos, pen, style, rawText = "", baseFontSize = 16) {
 		case 0:
 		case 3:
 		case 6:
-			//align = "left"; // test
+			align = "left"; // A required assumption
 			positionAlign = "line-left";
 			break;
 		case 2:
 		case 5:
 		case 8:
-			//align = "right"; // test
+			align = "right"; // A required assumption
 			positionAlign = "line-right";
 			break;
 	}
@@ -565,23 +567,10 @@ function mapPosToCue(pos, pen, style, rawText = "", baseFontSize = 16) {
 		[ver, hor] = [hor, ver];
 	}
 
-	if (!align && positionAlign) {
-		const vWidth = video?.getBoundingClientRect()?.width || 1;
-		const fs = baseFontSize * (1 + fontSizeIncrement * 2);
-		rawText.split("\n").forEach((line) => {
-			const lineWidth = line.length * fs * 0.7808;
-			lineWidth > size && (size = lineWidth);
-		});
-		size = (size / vWidth) * 100;
-		size = Math.min(rd(size), 100);
-		console.log("Calculated size based on text width:", size);
-	}
-
 	return {
 		line: rd(ver, 2),
 		position: rd(hor, 2), // defaults to 'auto'
 		align: align, // defaults to 'center'
-		size: size, // defaults to 100, iOS has a bug when posAlign mismatches align
 		positionAlign: positionAlign, // Defaults to 'auto'
 		lineAlign: lineAlign, // Defaults to 'start'
 		vertical: vertical, // defaults to none
@@ -589,6 +578,7 @@ function mapPosToCue(pos, pen, style, rawText = "", baseFontSize = 16) {
 }
 
 /**
+ * @param {TextTrack} track
  * @param {Json3} json
  */
 function addCuesToTrack(track, json, stackProcess) {
@@ -619,6 +609,7 @@ function addCuesToTrack(track, json, stackProcess) {
 				start: start,
 				end: end,
 				id: ev.id,
+				penId: ev.pPenId,
 				posId: ev.wpWinPosId,
 				styleId: ev.wsWinStyleId,
 			};
@@ -670,23 +661,11 @@ function addCuesToTrack(track, json, stackProcess) {
 
 		cue.snapToLines = false;
 
-		const rawText = ev.segs?.map((s) => s.utf8).join("") || "";
-		const baseFontSize = calculateBaseFontSize(
-			video?.getBoundingClientRect()?.width,
-			video?.getBoundingClientRect()?.height,
-		);
-
 		// Get position data for this event
-		const pos = wpWinPositions[ev.wpWinPosId ?? -1],
-			eventPen = pens[ev.pPenId ?? -1],
-			eventStyle = wsWinStyles[ev.wsWinStyleId ?? -1];
-		const placement = mapPosToCue(
-			pos,
-			eventPen,
-			eventStyle,
-			rawText,
-			baseFontSize,
-		);
+		const pos = wpWinPositions[ev.wpWinPosId],
+			eventPen = pens[ev.pPenId],
+			eventStyle = wsWinStyles[ev.wsWinStyleId];
+		const placement = mapPosToCue(pos, eventPen, eventStyle);
 
 		cue.line = placement?.line;
 		if (placement.position != null) {
@@ -696,7 +675,6 @@ function addCuesToTrack(track, json, stackProcess) {
 		placement.positionAlign && (cue.positionAlign = placement.positionAlign);
 		placement.lineAlign && (cue.lineAlign = placement.lineAlign);
 		placement.vertical && (cue.vertical = placement.vertical);
-		placement.size && (cue.size = placement.size);
 
 		track.addCue(cue);
 	}
@@ -722,7 +700,6 @@ function addCuesToTrack(track, json, stackProcess) {
 			merged.line = c1.line;
 			merged.position = c1.position;
 			merged.align = c1.align;
-			merged.size = c1.size;
 			merged.positionAlign = c1.positionAlign;
 			merged.lineAlign = c1.lineAlign;
 			track.addCue(merged);

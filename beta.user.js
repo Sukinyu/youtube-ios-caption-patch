@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         MWeb Youtube Captions Patch
 // @author       Sukinyu
-// @version      1.0.17
-// @last         5/5/2026 (mm/dd/yyyy)
+// @version      1.0.18
+// @last         5/8/2026 (mm/dd/yyyy)
 // @description  Fix captions on youtube videos in webkit fullscreen mode on iOS (https://m.youtube.com/).
 // @match        https://m.youtube.com/*
 // @updateURL    https://github.com/Sukinyu/youtube-ios-caption-patch/raw/refs/heads/main/beta.user.js
@@ -95,6 +95,9 @@ function penToCss(pen) {
 	const cB = rgb(pen.bcBackColor ?? 0);
 	const backAlpha = rd(pen.boBackAlpha != null ? pen.boBackAlpha / 255 : 0.5);
 
+	colorCss =
+		c != "0,0,0" || foreAlpha != 1 ? `color: rgba(${c},${foreAlpha});` : "";
+
 	const backgroundCss =
 		backAlpha != 0 ? `background: rgba(${cB},${backAlpha});` : "";
 
@@ -148,7 +151,7 @@ function penToCss(pen) {
 
 	return `
 				${i} ${fontVariant} ${b} ${u}
-				color: rgba(${c},${foreAlpha});
+				${colorCss}
 				${backgroundCss}
 				${fontFamilyCss}
 				${fontSizeCss}
@@ -174,7 +177,7 @@ function generatePenStyles() {
 
 	const vRect = video?.getBoundingClientRect();
 	const fs = calculateBaseFontSize(vRect?.width, vRect?.height);
-	let style = `::cue(c) { font-family: ${defaultFont}; font-size: ${fs}px;${isMWEB ? " font-weight: 500;" : ""} }\n`;
+	let style = `::cue(c) { font-family: ${defaultFont}; font-size: ${fs}px; line-height: normal;${isMWEB ? " font-weight: 500;" : ""}}\n`;
 	style += `::cue(.bg) { background: rgba(0,0,0,0.5); }\n\n`;
 
 	for (let i = 0; i < currentPens.length; i++) {
@@ -186,40 +189,50 @@ function generatePenStyles() {
 }
 
 function mapPosToCue(pos, pen, style) {
-	pos || (pos = { avVerPos: 95, ahHorPos: 50, apPoint: 7 });
+	pos || (pos = { avVerPos: 95, ahHorPos: 20, apPoint: 7 });
 
 	const anchorPoint = pos.apPoint;
 	const hasAnchor = anchorPoint != null;
 
-	let ver = pos.avVerPos * 0.96 + 2;
-	let hor = pos.ahHorPos * 0.96 + 2;
+	let ver = pos.avVerPos != null ? pos.avVerPos * 0.96 + 2 : 0;
+	let hor = pos.ahHorPos != null ? pos.ahHorPos * 0.96 + 2 : 50;
 
 	const fontSizeIncrement = pen?.szPenSize ? pen.szPenSize / 100 - 1 : 0;
 	if (hasAnchor && [0, 3, 6].includes(anchorPoint)) {
 		hor = Math.max(hor / (1 + fontSizeIncrement * 2), 2);
 		console.log("Adjusted hor for left anchor:", hor);
 	}
-	let position = hor;
+	
 	let align = "";
-	let positionAlign = undefined;
-	let lineAlign = [0, 1, 2].includes(pos.apPoint) ? "" : "end";
+	let positionAlign = "";
+	let lineAlign = undefined;
 	let vertical = "";
 
 	switch (anchorPoint) {
 		case 0:
 		case 3:
 		case 6:
+			align = "left"; // A required assumption 
 			positionAlign = "line-left";
-			break;
-		case 1:
-		case 4:
-		case 7:
-			lineAlign = "center";
 			break;
 		case 2:
 		case 5:
 		case 8:
+			align = "right"; // A required assumption
 			positionAlign = "line-right";
+			break;
+	}
+
+	switch (anchorPoint) {
+		case 3:
+		case 4:
+		case 5:
+			lineAlign = "center";
+			break;
+		case 6:
+		case 7:
+		case 8:
+			lineAlign = "end";
 			break;
 	}
 
@@ -237,13 +250,22 @@ function mapPosToCue(pos, pen, style) {
 			positionAlign = "";
 	}
 
+	if (style?.pdPrintDir === 1 || style?.pdPrintDir === 2) {
+		lineAlign = "center";
+		positionAlign = "line-right";
+		vertical = style.pdPrintDir === 1 ? "rl" : "lr";
+
+		// swap ver <-> pos
+		[ver, hor] = [hor, ver];
+	}
+
 	return {
 		line: rd(ver, 2),
-		position: rd(position, 2),
-		align: align,
+		position: rd(hor, 2), // defaults to 'auto'
+		align: align, // defaults to 'center'
 		positionAlign: positionAlign, // Defaults to 'auto'
-		lineAlign: lineAlign, // Defaults to 'start' if unset
-		vertical: null,
+		lineAlign: lineAlign, // Defaults to 'start'
+		vertical: vertical, // defaults to none
 	};
 }
 
@@ -262,12 +284,45 @@ function addCuesToTrack(track, json, stackProcess) {
 	const style = generatePenStyles();
 	if (style) setCaptionStyle(style);
 
+	const win = [];
+
 	// ---------- build cues ----------
 	for (const ev of events) {
-		if (!ev.segs || !ev.segs.length) continue; // Skip events without segments
 		const start = Number(ts(ev.tStartMs));
 		const end = Number(ts(ev.tStartMs + (ev.dDurationMs || 0)));
+
+		if (!ev.segs && ev?.id) {
+			// Handle events with no segments but have an ID (possible metadata or positioning cues)
+			let container = {
+				start: start,
+				end: end,
+				id: ev.id,
+				penId: ev.pPenId,
+				posId: ev.wpWinPosId,
+				styleId: ev.wsWinStyleId,
+			};
+			win.push(container);
+			continue;
+		}
+
 		const parts = [];
+
+		if (ev.wWinId != null) {
+			let current; // Search for the corresponding window definition
+			for (current = 0; current <= win.length; current++) {
+				if (
+					win[current].id === ev.wWinId &&
+					win[current].start <= start &&
+					win[current].end >= end
+				) {
+					break;
+				}
+			}
+			const winData = win[current] || {};
+			ev.wpWinPosId ??= winData.posId;
+			ev.pPenId ??= winData.penId;
+			ev.wsWinStyleId ??= winData.styleId;
+		}
 
 		ev.segs.forEach((seg) => {
 			if (!seg.utf8.length) return;
@@ -294,9 +349,9 @@ function addCuesToTrack(track, json, stackProcess) {
 		cue.snapToLines = false;
 
 		// Get position data for this event
-		const pos = wpWinPositions[ev.wpWinPosId];
-		const eventPen = pens[ev.pPenId];
-		const eventStyle = wsWinStyles[ev.wsWinStyleId];
+		const pos = wpWinPositions[ev.wpWinPosId],
+			eventPen = pens[ev.pPenId],
+			eventStyle = wsWinStyles[ev.wsWinStyleId];
 		const placement = mapPosToCue(pos, eventPen, eventStyle);
 
 		cue.line = placement?.line;
@@ -435,7 +490,7 @@ function updateCaptionStyles() {
 
 window.onresize = () => updateCaptionStyles();
 
-if (video.src) {
+if (video?.src) {
 	new MutationObserver(() => {
 		const track = video?.textTracks[0];
 		[...track.cues].forEach((cue) => track?.removeCue(cue));
