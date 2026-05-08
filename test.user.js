@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         MWeb Youtube Captions Patch (dev)
 // @author       Sukinyu
-// @version      16
+// @version      17
 // @match        https://m.youtube.com/*
 // @updateURL    https://github.com/Sukinyu/youtube-ios-caption-patch/raw/refs/heads/main/test.user.js
 // @downloadURL  https://github.com/Sukinyu/youtube-ios-caption-patch/raw/refs/heads/main/test.user.js
@@ -63,12 +63,13 @@
  */
 
 // Start of debug code
-/*
+
 function getActiveCues(track) {
 	return [...(track.cues || [])];
 }
 function openEditor(cue) {
 	const editor = document.createElement("div");
+	editor.id = "cue-editor";
 
 	Object.assign(editor.style, {
 		position: "fixed",
@@ -277,6 +278,7 @@ function openEditor(cue) {
 }
 function buildCueList(track) {
 	const panel = document.createElement("div");
+	panel.id = "cue-list-panel";
 	panel.style.cssText = `
         position:fixed;
         right:0;
@@ -310,12 +312,12 @@ function buildCueList(track) {
 
 	document.body.appendChild(panel);
 }
-*/
+
 // #End of debug code
 
 const injectedUrls = new Set();
 /** @type {HTMLVideoElement | null} */
-let video = document.querySelector("video");
+const video = document.querySelector("video");
 const defaultFont =
 	'"YouTube Noto", Roboto, Arial, Helvetica, Verdana, "PT Sans Caption", sans-serif';
 let currentPens = [];
@@ -789,10 +791,7 @@ const po = new PerformanceObserver((list) => {
 
 	let track = createTrack();
 	tryFetch("json3")
-		.then((json) => {
-			addCuesToTrack(track, parseJson3(json), isAutoGen);
-			//buildCueList(track); // debug code
-		})
+		.then((json) => addCuesToTrack(track, parseJson3(json), isAutoGen))
 		.catch((err) => alert(`Error adding captions: ${err}\n${err.stack}`));
 });
 
@@ -826,3 +825,60 @@ video.onwebkitfullscreenchange = () => {
 	}
 };
 */
+
+function createCaptionEditorButton(openEditor) {
+	const existing = document.getElementById("caption-editor-btn");
+	if (existing) return existing;
+
+	const btn = document.createElement("button");
+	btn.id = "caption-editor-btn";
+	btn.textContent = "CC Editor";
+
+	btn.style.position = "fixed";
+	btn.style.left = "12px";
+	btn.style.bottom = "12px";
+	btn.style.zIndex = "999999";
+	btn.style.padding = "10px 14px";
+	btn.style.border = "none";
+	btn.style.borderRadius = "10px";
+	btn.style.background = "rgba(20,20,20,0.85)";
+	btn.style.color = "white";
+	btn.style.fontSize = "14px";
+	btn.style.fontFamily = "Arial, sans-serif";
+	btn.style.backdropFilter = "blur(10px)";
+	btn.style.webkitBackdropFilter = "blur(10px)";
+	btn.style.boxShadow = "0 2px 10px rgba(0,0,0,0.35)";
+	btn.style.cursor = "pointer";
+	btn.style.userSelect = "none";
+
+	btn.onmouseenter = () => {
+		btn.style.background = "rgba(40,40,40,0.95)";
+	};
+
+	btn.onmouseleave = () => {
+		btn.style.background = "rgba(20,20,20,0.85)";
+	};
+
+	btn.onclick = () => {
+		try {
+			openEditor?.();
+		} catch (err) {
+			alert(err + "\n\n" + err.stack);
+		}
+	};
+
+	document.body.appendChild(btn);
+
+	return btn;
+}
+
+createCaptionEditorButton(() => {
+	const list = document.querySelector("#cue-list-panel");
+	const editor = document.querySelector("#cue-editor");
+	if (list || editor) {
+		editor.style.display = editor.style.display === "none" ? "block" : "none";
+	} else {
+		const track = video?.textTracks[0];
+		buildCueList(track);
+	}
+});
