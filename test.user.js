@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         MWeb Youtube Captions Patch (dev)
 // @author       Sukinyu
-// @version      10
+// @version      11
 // @match        https://m.youtube.com/*
 // @updateURL    https://github.com/Sukinyu/youtube-ios-caption-patch/raw/refs/heads/main/test.user.js
 // @downloadURL  https://github.com/Sukinyu/youtube-ios-caption-patch/raw/refs/heads/main/test.user.js
@@ -63,7 +63,7 @@
  */
 
 // Start of debug code
-
+/*
 function getActiveCues(track) {
 	return [...(track.cues || [])];
 }
@@ -84,14 +84,6 @@ function openEditor(cue) {
 		fontSize: "12px",
 		fontFamily: "monospace",
 	});
-	/**
-	 * @param {string} label
-	 * @param {number} min
-	 * @param {number} max
-	 * @param {number} step
-	 * @param {function} getter
-	 * @param {function} setter
-	 */
 	function dualControl(label, min, max, step, getter, setter) {
 		const wrap = document.createElement("div");
 		wrap.style.marginBottom = "8px";
@@ -318,7 +310,7 @@ function buildCueList(track) {
 
 	document.body.appendChild(panel);
 }
-
+*/
 // #End of debug code
 
 const injectedUrls = new Set();
@@ -518,7 +510,7 @@ function mapPosToCue(pos, pen, style) {
 
 	let align = "";
 	let size = null;
-	let positionAlign = undefined;
+	let positionAlign = "";
 	let lineAlign = undefined;
 	let vertical = "";
 
@@ -573,7 +565,7 @@ function mapPosToCue(pos, pen, style) {
 		[ver, hor] = [hor, ver];
 	}
 
-	if (align != positionAlign?.replace("line-", "")) {
+	if ( !align && positionAlign) {
 		size = 20;
 	}
 
@@ -802,7 +794,7 @@ const po = new PerformanceObserver((list) => {
 	tryFetch("json3")
 		.then((json) => {
 			addCuesToTrack(track, parseJson3(json), isAutoGen);
-			buildCueList(track); // debug code
+			//buildCueList(track); // debug code
 		})
 		.catch((err) => alert(`Error adding captions: ${err}\n${err.stack}`));
 });
