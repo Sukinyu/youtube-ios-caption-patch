@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         MWeb Youtube Captions Patch (dev)
 // @author       Sukinyu
-// @version      9
+// @version      10
 // @match        https://m.youtube.com/*
 // @updateURL    https://github.com/Sukinyu/youtube-ios-caption-patch/raw/refs/heads/main/test.user.js
 // @downloadURL  https://github.com/Sukinyu/youtube-ios-caption-patch/raw/refs/heads/main/test.user.js
@@ -84,7 +84,14 @@ function openEditor(cue) {
 		fontSize: "12px",
 		fontFamily: "monospace",
 	});
-
+	/**
+	 * @param {string} label
+	 * @param {number} min
+	 * @param {number} max
+	 * @param {number} step
+	 * @param {function} getter
+	 * @param {function} setter
+	 */
 	function dualControl(label, min, max, step, getter, setter) {
 		const wrap = document.createElement("div");
 		wrap.style.marginBottom = "8px";
@@ -100,14 +107,14 @@ function openEditor(cue) {
 
 		const slider = document.createElement("input");
 		slider.type = "range";
-		slider.min = min;
-		slider.max = max;
-		slider.step = step;
+		slider.min = String(min);
+		slider.max = String(max);
+		slider.step = String(step);
 		slider.value = getter();
 
 		const input = document.createElement("input");
 		input.type = "number";
-		input.step = step;
+		input.step = String(step);
 		input.value = getter();
 		input.style.width = "70px";
 
@@ -203,12 +210,23 @@ function openEditor(cue) {
 	// --- Positioning ---
 	editor.appendChild(
 		dualControl(
-			"size",
+			"line",
 			0,
-			200,
+			100,
 			1,
-			() => cue.size ?? 100,
-			(v) => (cue.size = v),
+			() => cue.line ?? 100,
+			(v) => (cue.line = v),
+		),
+	);
+
+	editor.appendChild(
+		dualControl(
+			"position",
+			0,
+			100,
+			1,
+			() => cue.position ?? 100,
+			(v) => (cue.position = v),
 		),
 	);
 
@@ -216,18 +234,7 @@ function openEditor(cue) {
 		dualControl(
 			"size",
 			0,
-			200,
-			1,
-			() => cue.size ?? 100,
-			(v) => (cue.size = v),
-		),
-	);
-
-	editor.appendChild(
-		dualControl(
-			"size",
-			0,
-			200,
+			100,
 			1,
 			() => cue.size ?? 100,
 			(v) => (cue.size = v),
