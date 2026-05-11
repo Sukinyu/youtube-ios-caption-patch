@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         MWeb Youtube Captions Patch (dev)
 // @author       Sukinyu
-// @version      17
+// @version      18
 // @match        https://m.youtube.com/*
 // @updateURL    https://github.com/Sukinyu/youtube-ios-caption-patch/raw/refs/heads/main/test.user.js
 // @downloadURL  https://github.com/Sukinyu/youtube-ios-caption-patch/raw/refs/heads/main/test.user.js
@@ -404,7 +404,7 @@ function penToCss(pen) {
 	const cB = rgb(pen.bcBackColor ?? 0);
 	const backAlpha = rd(pen.boBackAlpha != null ? pen.boBackAlpha / 255 : 0.5);
 
-	colorCss =
+	const colorCss =
 		c != "0,0,0" || foreAlpha != 1 ? `color: rgba(${c},${foreAlpha});` : "";
 
 	const backgroundCss =
@@ -508,7 +508,7 @@ function mapPosToCue(pos, pen, style) {
 	let hor = pos.ahHorPos != null ? pos.ahHorPos * 0.96 + 2 : 50;
 
 	const fontSizeIncrement = pen?.szPenSize ? pen.szPenSize / 100 - 1 : 0;
-	if (hasAnchor && [0, 3, 6].includes(anchorPoint)) {
+	if (hasAnchor && [0, 3, 6].includes(anchorPoint) && !isMWEB) {
 		hor = Math.max(hor / (1 + fontSizeIncrement * 2), 2);
 		console.log("Adjusted hor for left anchor:", hor);
 	}
@@ -664,9 +664,9 @@ function addCuesToTrack(track, json, stackProcess) {
 		cue.snapToLines = false;
 
 		// Get position data for this event
-		const pos = wpWinPositions[ev.wpWinPosId],
-			eventPen = pens[ev.pPenId],
-			eventStyle = wsWinStyles[ev.wsWinStyleId];
+		const pos = wpWinPositions[ev.wpWinPosId ?? -1],
+			eventPen = pens[ev.pPenId ?? -1],
+			eventStyle = wsWinStyles[ev.wsWinStyleId ?? -1];
 		const placement = mapPosToCue(pos, eventPen, eventStyle);
 
 		cue.line = placement?.line;
@@ -840,13 +840,14 @@ function createCaptionEditorButton(openEditor) {
 	btn.style.zIndex = "999999";
 	btn.style.padding = "10px 14px";
 	btn.style.border = "none";
-	btn.style.borderRadius = "10px";50
+	btn.style.borderRadius = "10px";
+	50;
 	btn.style.background = "rgba(20,20,20,0.85)";
 	btn.style.color = "white";
 	btn.style.fontSize = "14px";
 	btn.style.fontFamily = "Arial, sans-serif";
-	btn.style.backdropFilter = "blur(10px)";
-	btn.style.webkitBackdropFilter = "blur(10px)";
+	btn.style.backdropFilter = "blur(5px)";
+	btn.style.webkitBackdropFilter = "blur(5px)";
 	btn.style.boxShadow = "0 2px 10px rgba(0,0,0,0.35)";
 	btn.style.cursor = "pointer";
 	btn.style.userSelect = "none";
@@ -876,7 +877,7 @@ createCaptionEditorButton(() => {
 	const list = document.querySelector("#cue-list-panel");
 	const editor = document.querySelector("#cue-editor");
 	if (list || editor) {
-		editor.style.display = editor.style.display === "none" ? "block" : "none";
+		editor.style.display = editor?.style.display === "none" ? "block" : "none";
 	} else {
 		const track = video?.textTracks[0];
 		buildCueList(track);
