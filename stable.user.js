@@ -1,8 +1,8 @@
 // ==UserScript==
-// @name         Fix MWeb Youtube Fullscreen Captions
+// @name         MWeb Youtube Captions Patch
 // @author       Sukinyu
-// @version      1.0.0
-// @last         4/24/2026 (mm/dd/yyyy)
+// @version      1.0.20
+// @last         5/11/2026 (mm/dd/yyyy)
 // @description  Fix captions on youtube videos in webkit fullscreen mode on iOS (https://m.youtube.com/).
 // @match        https://m.youtube.com/*
 // @updateURL    https://github.com/Sukinyu/youtube-ios-caption-patch/raw/refs/heads/main/stable.user.js
@@ -14,6 +14,7 @@ const video = document.querySelector("video");
 const defaultFont =
 	'"YouTube Noto", Roboto, Arial, Helvetica, Verdana, "PT Sans Caption", sans-serif';
 let currentPens = [];
+const isMWEB = window.location.host.startsWith("m.");
 
 function calculateBaseFontSize(videoWidth, videoHeight) {
 	let baseSize = (videoHeight / 360) * 16;
@@ -35,12 +36,10 @@ function ts(ms, format = false) {
 	}
 	return ms / 1000;
 }
-function rgb(num) {
-	return `${(num >> 16) & 255},${(num >> 8) & 255},${num & 255}`;
-}
-function rd(num, decimals = 4) {
-	return Number(num.toFixed(decimals));
-}
+
+const rgb = (num) => `${(num >> 16) & 255},${(num >> 8) & 255},${num & 255}`;
+
+const rd = (num, decimals = 4) => +num.toFixed(decimals);
 
 function penFontFamily(pen) {
 	const fontFamily = pen.fsFontStyle;
@@ -96,6 +95,12 @@ function penToCss(pen) {
 	const cB = rgb(pen.bcBackColor ?? 0);
 	const backAlpha = rd(pen.boBackAlpha != null ? pen.boBackAlpha / 255 : 0.5);
 
+	const colorCss =
+		c != "0,0,0" || foreAlpha != 1 ? `color: rgba(${c},${foreAlpha});` : "";
+
+	const backgroundCss =
+		backAlpha != 0 ? `background: rgba(${cB},${backAlpha});` : "";
+
 	// Edge effects
 	const edgeType = pen.etEdgeType ?? 0;
 	let textShadow = "";
@@ -112,7 +117,7 @@ function penToCss(pen) {
 			case 1: // Uniform raised
 				const step = window.devicePixelRatio >= 2 ? 0.5 : 1;
 				textShadow += Array.from(
-					{ length: Math.ceil((w - K) / step) + 1 },
+					{ length: Math.ceil((w - K) / step) },
 					(_, i) => `${K + i * step}px ${K + i * step}px ${darkShadow}`,
 				).join(", ");
 				break;
@@ -120,7 +125,7 @@ function penToCss(pen) {
 				textShadow += `${K}px ${K}px ${lightShadow}, -${K}px -${K}px ${darkShadow}`;
 				break;
 			case 3: // Glow (most common)
-				textShadow += Array(6).fill(`0 0 ${v}px ${darkShadow}`).join(", ");
+				textShadow += Array(5).fill(`0 0 ${v}px ${darkShadow}`).join(", ");
 				break;
 			case 4: // Blur effect
 				const shadows = [];
@@ -134,21 +139,24 @@ function penToCss(pen) {
 	}
 
 	// Text decorations
-	const bold = pen.bAttr == 1 ? "font-weight: bolder;" : "";
-	const italic = pen.iAttr == 1 ? "font-style: italic;" : "";
-	const underline = pen.uAttr == 1 ? "text-decoration: underline;" : "";
+	const b = pen.bAttr == 1 ? `font-weight: bold;` : "";
+	const i = pen.iAttr == 1 ? "font-style: italic;" : "";
+	const u = pen.uAttr == 1 ? "text-decoration: underline;" : "";
 	const fontFamily = penFontFamily(pen);
 	const fontVariant =
 		Number(pen.fsFontStyle ?? 0) === 7 ? "font-variant: small-caps;" : "";
 	const fontFamilyCss = !fontFamily ? "" : `font-family: ${fontFamily};`;
 
+	const packed = pen.hgHorizGroup ? "text-combine-upright: all;" : "";
+
 	return `
-				${italic} ${fontVariant} ${bold} ${underline}
-				color: rgba(${c},${foreAlpha});
-				background: rgba(${cB},${backAlpha});
+				${i} ${fontVariant} ${b} ${u}
+				${colorCss}
+				${backgroundCss}
 				${fontFamilyCss}
 				${fontSizeCss}
 				${textShadow}
+				${packed}
 			`
 		.replace(/\s+/g, " ")
 		.trim();
@@ -169,8 +177,8 @@ function generatePenStyles() {
 
 	const vRect = video?.getBoundingClientRect();
 	const fs = calculateBaseFontSize(vRect?.width, vRect?.height);
-	let style = `::cue(c) { font-family: ${defaultFont}; font-size: ${fs}px; line-height: normal; }\n`;
-	style += `::cue(.bg) { background: rgba(0,0,0,0.5);}\n`;
+	let style = `::cue(c) { font-family: ${defaultFont}; font-size: ${fs}px; line-height: normal;${isMWEB ? " font-weight: 500;" : ""}}\n`;
+	style += `::cue(.bg) { background: rgba(0,0,0,0.5); }\n\n`;
 
 	for (let i = 0; i < currentPens.length; i++) {
 		const pen = currentPens[i];
@@ -180,52 +188,84 @@ function generatePenStyles() {
 	return style;
 }
 
-function mapPosToCue(pos, pen) {
-	pos || (pos = { avVerPos: 90, ahHorPos: 5, apPoint: 6 });
+function mapPosToCue(pos, pen, style) {
+	pos || (pos = { avVerPos: 95, ahHorPos: 50, apPoint: 7 });
 
 	const anchorPoint = pos.apPoint;
 	const hasAnchor = anchorPoint != null;
 
-	let ver = pos.avVerPos * 0.96 + 2;
-	let hor = pos.ahHorPos * 0.96 + 2;
+	let ver = pos.avVerPos != null ? pos.avVerPos * 0.96 + 2 : 0;
+	let hor = pos.ahHorPos != null ? pos.ahHorPos * 0.96 + 2 : 50;
 
 	const fontSizeIncrement = pen?.szPenSize ? pen.szPenSize / 100 - 1 : 0;
-	if (hasAnchor && [0, 3, 6].includes(anchorPoint)) {
+	if (hasAnchor && [0, 3, 6].includes(anchorPoint) && !isMWEB) {
 		hor = Math.max(hor / (1 + fontSizeIncrement * 2), 2);
 		console.log("Adjusted hor for left anchor:", hor);
 	}
-	let position = hor;
-	let align = undefined;
-	let positionAlign = undefined;
-	let lineAlign = "end";
 
-	if (hasAnchor) {
-		switch (anchorPoint) {
-			case 0:
-			case 3:
-			case 6:
-				align = "left";
-				break;
-			case 2:
-			case 5:
-			case 8:
-				align = "right";
-				break;
-			case 1:
-			case 4:
-			case 7:
-				align = "center";
-				break;
-		}
+	let align = "";
+	let positionAlign = "";
+	let lineAlign = undefined;
+	let vertical = "";
+
+	switch (anchorPoint) {
+		case 0:
+		case 3:
+		case 6:
+			align = "left"; // A required assumption
+			positionAlign = "line-left";
+			break;
+		case 2:
+		case 5:
+		case 8:
+			align = "right"; // A required assumption
+			positionAlign = "line-right";
+			break;
 	}
-	[0,1,2].includes(anchorPoint) && (positionAlign = null);
+
+	switch (anchorPoint) {
+		case 3:
+		case 4:
+		case 5:
+			lineAlign = "center";
+			break;
+		case 6:
+		case 7:
+		case 8:
+			lineAlign = "end";
+			break;
+	}
+
+	switch (style?.juJustifCode) {
+		case 0:
+			align = "left";
+			positionAlign = "line-left";
+			break;
+		case 1:
+			align = "right";
+			positionAlign = "line-right";
+			break;
+		case 2:
+			align = "";
+			positionAlign = "";
+	}
+
+	if (style?.pdPrintDir === 1 || style?.pdPrintDir === 2) {
+		lineAlign = "center";
+		positionAlign = "line-right";
+		vertical = style.pdPrintDir === 1 ? "rl" : "lr";
+
+		// swap ver <-> pos
+		[ver, hor] = [hor, ver];
+	}
 
 	return {
-		line: ver,
-		position: position,
-		align: align,
+		line: rd(ver, 2),
+		position: rd(hor, 2), // defaults to 'auto'
+		align: align, // defaults to 'center'
 		positionAlign: positionAlign, // Defaults to 'auto'
-		lineAlign: lineAlign, // Defaults to 'start' if unset
+		lineAlign: lineAlign, // Defaults to 'start'
+		vertical: vertical, // defaults to none
 	};
 }
 
@@ -233,6 +273,7 @@ function addCuesToTrack(track, json, stackProcess) {
 	const events = json.events || [];
 	const pens = json.pens || [];
 	const wpWinPositions = json.wpWinPositions || [];
+	const wsWinStyles = json.wsWinStyles || [];
 
 	// Store pens globally for resize updates
 	currentPens = pens;
@@ -243,28 +284,63 @@ function addCuesToTrack(track, json, stackProcess) {
 	const style = generatePenStyles();
 	if (style) setCaptionStyle(style);
 
-	// ---------- build cues array first ----------
+	const win = [];
+
+	// ---------- build cues ----------
 	for (const ev of events) {
-		if (!ev.segs || !ev.segs.length) continue; // Skip events without segments
 		const start = Number(ts(ev.tStartMs));
 		const end = Number(ts(ev.tStartMs + (ev.dDurationMs || 0)));
+
+		if (!ev.segs && ev?.id) {
+			// Handle events with no segments but have an ID (possible metadata or positioning cues)
+			let container = {
+				start: start,
+				end: end,
+				id: ev.id,
+				penId: ev.pPenId,
+				posId: ev.wpWinPosId,
+				styleId: ev.wsWinStyleId,
+			};
+			win.push(container);
+			continue;
+		}
+
 		const parts = [];
+
+		if (ev.wWinId != null) {
+			let current; // Search for the corresponding window definition
+			for (current = 0; current <= win.length; current++) {
+				if (
+					win[current].id === ev.wWinId &&
+					win[current].start <= start &&
+					win[current].end >= end
+				) {
+					break;
+				}
+			}
+			const winData = win[current] || {};
+			ev.wpWinPosId ??= winData.posId;
+			ev.pPenId ??= winData.penId;
+			ev.wsWinStyleId ??= winData.styleId;
+		}
+
 		ev.segs.forEach((seg) => {
 			if (!seg.utf8.length) return;
+			if (seg.utf8 == "​") return; // 0 width space
 
 			if (seg.tOffsetMs) {
 				parts.push(`<${ts(ev.tStartMs + seg.tOffsetMs, true)}>`); // Karaoke timing
 			}
 
-			parts.push(seg.pPenId != null ? `<c.pen${seg.pPenId}>` : `<c.bg>`);
+			const penId = seg.pPenId != null ? seg.pPenId : ev.pPenId;
+
+			parts.push(penId != null ? `<c.pen${penId}>` : `<c.bg>`);
 			parts.push(seg.utf8);
 			parts.push("</c>");
 		});
 
 		if (parts.length === 3 && parts[1] == "\n") continue; // Skip empty cues from auto-gen
 
-		parts.unshift(`<c${ev.pPenId ? `.pen${ev.pPenId}` : ""}>`);
-		parts.push("</c>");
 		let cueText = parts.join("");
 		let cue = new VTTCue(start, end, cueText);
 		if (!ev.segs?.length) continue;
@@ -273,18 +349,19 @@ function addCuesToTrack(track, json, stackProcess) {
 		cue.snapToLines = false;
 
 		// Get position data for this event
-		const posId = ev.wpWinPosId;
-		const pos = wpWinPositions[posId];
-		const eventPen = ev.pPenId != null ? pens[ev.pPenId] : null;
-		const placement = mapPosToCue(pos, eventPen);
+		const pos = wpWinPositions[ev.wpWinPosId ?? -1],
+			eventPen = pens[ev.pPenId ?? -1],
+			eventStyle = wsWinStyles[ev.wsWinStyleId ?? -1];
+		const placement = mapPosToCue(pos, eventPen, eventStyle);
 
-		placement.line && (cue.line = rd(placement.line, 2));
+		cue.line = placement?.line;
 		if (placement.position != null) {
 			cue.position = rd(placement.position, 2);
 		}
 		placement.align && (cue.align = placement.align);
 		placement.positionAlign && (cue.positionAlign = placement.positionAlign);
-		placement.lineAlign && (cue.lineAlign = placement.lineAlign)
+		placement.lineAlign && (cue.lineAlign = placement.lineAlign);
+		placement.vertical && (cue.vertical = placement.vertical);
 
 		track.addCue(cue);
 	}
@@ -333,92 +410,91 @@ function addCuesToTrack(track, json, stackProcess) {
 
 const po = new PerformanceObserver((list) => {
 	if (!window.location.pathname.startsWith("/watch")) return;
-	for (const entry of list.getEntries()) {
-		const url = entry.name;
-		if (!url.includes("/api/timedtext") || injectedUrls.has(url)) continue;
-		injectedUrls.add(url);
-		console.log("Caption request detected:", url);
-		let newURL = new URL(url);
-		const removeParams = [
-			"potc",
-			"xorb",
-			"xobt",
-			"xovt",
-			"cbr",
-			"cbrver",
-			"cver",
-			"cplayer",
-			"cos",
-			"cosver",
-			"cplatform",
-		];
-		[...newURL.searchParams.keys()].forEach(
-			(key) => removeParams.includes(key) && newURL.searchParams.delete(key),
-		);
-		const userLang = navigator.language.split("-")[0] || "en"; // Use browser language or default to English
-		if (
-			!newURL.searchParams.has("lang", userLang) &&
-			!newURL.searchParams.has("tlang")
-		) {
-			newURL.searchParams.set("tlang", userLang);
-		}
-		const translated = newURL.searchParams.has("tlang");
-		const isAutoGen = newURL.searchParams.get("kind") === "asr";
+	const entries = list.getEntries();
+	const url = entries[entries.length - 1].name;
+	if (!url.includes("/api/timedtext") || injectedUrls.has(url)) return;
+	injectedUrls.add(url);
+	console.log("Caption request detected:", url);
+	let newURL = new URL(url);
+	const removeParams = [
+		"potc",
+		"xorb",
+		"xobt",
+		"xovt",
+		"cbr",
+		"cbrver",
+		"cver",
+		"cplayer",
+		"cos",
+		"cosver",
+		"cplatform",
+	];
+	[...newURL.searchParams.keys()].forEach(
+		(key) => removeParams.includes(key) && newURL.searchParams.delete(key),
+	);
+	const userLang = navigator.language.split("-")[0] || "en"; // Use browser language or default to English
+	if (
+		!newURL.searchParams.has("lang", userLang) &&
+		!newURL.searchParams.has("tlang")
+	) {
+		newURL.searchParams.set("tlang", userLang);
+	}
+	const translated = newURL.searchParams.has("tlang");
+	const isAutoGen = newURL.searchParams.get("kind") === "asr";
 
-		function createTrack() {
-			let track =
-				video?.textTracks &&
-				[...(video?.textTracks || [])].find((t) =>
-					t.label.includes("Injected CC"),
-				);
-			if (!track) {
-				track = video?.addTextTrack("captions", "Injected CC", userLang);
-				track.mode = "showing";
-				console.log("Injected captions track");
-			} else {
-				if (track.cues) {
-					[...track.cues].forEach((cue) => track?.removeCue(cue)); // Clear existing cues
-				}
-			}
-			if (translated) {
-				track.label += " (TS)"; // short form of "Translated"
-			}
-			return track;
-		}
-
-		const tryFetch = (returnFormat) => {
-			newURL.searchParams.set("fmt", returnFormat);
-			injectedUrls.add(newURL.toString());
-			return fetch(newURL).then((r) => {
-				if (!r.ok) throw new Error(`HTTP ${r.status}`);
-				return r.text();
-			});
-		};
-
-		let track = createTrack();
-		if (isAutoGen) {
-			tryFetch("vtt")
-				.then((vttText) => {
-					const modified = vttText
-						.replace(/\nStyle:\n/g, "\nSTYLE\n")
-						.replace(/\n##\n/g, "");
-					track.src = URL.createObjectURL(
-						new Blob([modified], { type: "text/vtt" }),
-					);
-				})
-				.catch((err) => {
-					console.log(`VTT fetch failed, falling back to JSON3: ${err}`);
-					tryFetch("json3")
-						.then((json) => addCuesToTrack(track, parseJson3(json), true))
-						.catch((err) =>
-							alert(`Error adding captions: ${err}\n${err.stack}`),
-						);
-				});
+	function createTrack() {
+		let track =
+			video?.textTracks &&
+			[...(video?.textTracks || [])].find((t) =>
+				t.label.includes("Injected CC"),
+			);
+		if (!track) {
+			video || (video = document.querySelector("video"));
+			track = video.addTextTrack(
+				"captions",
+				`Injected CC${translated ? " (TS)" : ""}`,
+				userLang,
+			);
+			track.mode = "showing";
+			console.log("Injected captions track");
 		} else {
-			tryFetch("json3")
-				.then((json) => addCuesToTrack(track, parseJson3(json), isAutoGen))
-				.catch((err) => alert(`Error adding captions: ${err}\n${err.stack}`));
+			if (track.cues) {
+				[...track.cues].forEach((cue) => track?.removeCue(cue)); // Clear existing cues
+			}
 		}
+		return track;
+	}
+
+	const tryFetch = (returnFormat) => {
+		newURL.searchParams.set("fmt", returnFormat);
+		injectedUrls.add(newURL.toString());
+		return fetch(newURL).then((r) => {
+			if (!r.ok) throw new Error(`HTTP ${r.status}`);
+			return r.text();
+		});
+	};
+
+	let track = createTrack();
+	if (isAutoGen) {
+		tryFetch("vtt")
+			.then((vttText) => {
+				const modified = vttText
+					.replace(/\nStyle:\n/g, "\nSTYLE\n")
+					.replace(/\n##\n/g, "");
+				track.src = URL.createObjectURL(
+					new Blob([modified], { type: "text/vtt" }),
+				);
+			})
+			.catch((err) => {
+				console.log(`VTT fetch failed, falling back to JSON3: ${err}`);
+				tryFetch("json3")
+					.then((json) => addCuesToTrack(track, parseJson3(json), true))
+					.catch((err) => alert(`Error adding captions: ${err}\n${err.stack}`));
+			});
+	} else {
+		tryFetch("json3")
+			.then((json) => addCuesToTrack(track, parseJson3(json), isAutoGen))
+			.catch((err) => alert(`Error adding captions: ${err}\n${err.stack}`));
 	}
 });
 
@@ -432,7 +508,7 @@ function updateCaptionStyles() {
 
 window.onresize = () => updateCaptionStyles();
 
-if (video.src) {
+if (video?.src) {
 	new MutationObserver(() => {
 		const track = video?.textTracks[0];
 		[...track.cues].forEach((cue) => track?.removeCue(cue));

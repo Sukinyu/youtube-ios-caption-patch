@@ -1,8 +1,8 @@
 // ==UserScript==
-// @name         MWeb Youtube Captions Patch
+// @name         MWeb Youtube Captions Patch (beta)
 // @author       Sukinyu
-// @version      1.0.19
-// @last         5/8/2026 (mm/dd/yyyy)
+// @version      1.0.20
+// @last         5/11/2026 (mm/dd/yyyy)
 // @description  Fix captions on youtube videos in webkit fullscreen mode on iOS (https://m.youtube.com/).
 // @match        https://m.youtube.com/*
 // @updateURL    https://github.com/Sukinyu/youtube-ios-caption-patch/raw/refs/heads/main/beta.user.js
@@ -95,7 +95,7 @@ function penToCss(pen) {
 	const cB = rgb(pen.bcBackColor ?? 0);
 	const backAlpha = rd(pen.boBackAlpha != null ? pen.boBackAlpha / 255 : 0.5);
 
-	colorCss =
+	const colorCss =
 		c != "0,0,0" || foreAlpha != 1 ? `color: rgba(${c},${foreAlpha});` : "";
 
 	const backgroundCss =
@@ -198,11 +198,11 @@ function mapPosToCue(pos, pen, style) {
 	let hor = pos.ahHorPos != null ? pos.ahHorPos * 0.96 + 2 : 50;
 
 	const fontSizeIncrement = pen?.szPenSize ? pen.szPenSize / 100 - 1 : 0;
-	if (hasAnchor && [0, 3, 6].includes(anchorPoint)) {
+	if (hasAnchor && [0, 3, 6].includes(anchorPoint) && !isMWEB) {
 		hor = Math.max(hor / (1 + fontSizeIncrement * 2), 2);
 		console.log("Adjusted hor for left anchor:", hor);
 	}
-	
+
 	let align = "";
 	let positionAlign = "";
 	let lineAlign = undefined;
@@ -212,7 +212,7 @@ function mapPosToCue(pos, pen, style) {
 		case 0:
 		case 3:
 		case 6:
-			align = "left"; // A required assumption 
+			align = "left"; // A required assumption
 			positionAlign = "line-left";
 			break;
 		case 2:
@@ -349,9 +349,9 @@ function addCuesToTrack(track, json, stackProcess) {
 		cue.snapToLines = false;
 
 		// Get position data for this event
-		const pos = wpWinPositions[ev.wpWinPosId],
-			eventPen = pens[ev.pPenId],
-			eventStyle = wsWinStyles[ev.wsWinStyleId];
+		const pos = wpWinPositions[ev.wpWinPosId ?? -1],
+			eventPen = pens[ev.pPenId ?? -1],
+			eventStyle = wsWinStyles[ev.wsWinStyleId ?? -1];
 		const placement = mapPosToCue(pos, eventPen, eventStyle);
 
 		cue.line = placement?.line;
