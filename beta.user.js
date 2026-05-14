@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         MWeb Youtube Captions Patch (beta)
 // @author       Sukinyu
-// @version      1.0.22
-// @last         5/13/2026 (mm/dd/yyyy)
+// @version      1.0.23
+// @last         5/14/2026 (mm/dd/yyyy)
 // @description  Fix captions on youtube videos in webkit fullscreen mode on iOS (https://m.youtube.com/).
 // @match        https://m.youtube.com/*
 // @updateURL    https://github.com/Sukinyu/youtube-ios-caption-patch/raw/refs/heads/main/beta.user.js
@@ -269,7 +269,7 @@ function mapPosToCue(pos, pen, style) {
 	};
 }
 
-function addCuesToTrack(track, json, stackProcess) {
+function addCuesToTrack(track, json, isAutoGen) {
 	const events = json.events || [];
 	const pens = json.pens || [];
 	const wpWinPositions = json.wpWinPositions || [];
@@ -282,9 +282,11 @@ function addCuesToTrack(track, json, stackProcess) {
 
 	// ---------- build CSS from pens + positions ----------
 	const style = generatePenStyles();
-	pens.forEach(pen => {
-		pen.szPenSize ??= 150; // Default to 150% if not specified
-	});
+	if (isAutoGen && isMWEB) {
+		pens.forEach((pen) => {
+			pen.szPenSize = 150; // Default to 150%
+		});
+	}
 	if (style) setCaptionStyle(style);
 
 	const win = [];
@@ -368,7 +370,7 @@ function addCuesToTrack(track, json, stackProcess) {
 
 		track.addCue(cue);
 	}
-	if (!stackProcess) return;
+	if (!isAutoGen) return;
 	// ---------- detect overlapping cues, merge left-align lines ----------
 	const cues = [...track.cues];
 	for (let i = 0; i < cues.length; i++) {
