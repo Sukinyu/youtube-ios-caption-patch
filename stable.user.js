@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         MWeb Youtube Captions Patch
 // @author       Sukinyu
-// @version      1.0.20
-// @last         5/11/2026 (mm/dd/yyyy)
+// @version      1.0.21
+// @last         5/13/2026 (mm/dd/yyyy)
 // @description  Fix captions on youtube videos in webkit fullscreen mode on iOS (https://m.youtube.com/).
 // @match        https://m.youtube.com/*
 // @updateURL    https://github.com/Sukinyu/youtube-ios-caption-patch/raw/refs/heads/main/stable.user.js
@@ -198,7 +198,7 @@ function mapPosToCue(pos, pen, style) {
 	let hor = pos.ahHorPos != null ? pos.ahHorPos * 0.96 + 2 : 50;
 
 	const fontSizeIncrement = pen?.szPenSize ? pen.szPenSize / 100 - 1 : 0;
-	if (hasAnchor && [0, 3, 6].includes(anchorPoint) && !isMWEB) {
+	if (hasAnchor && [0, 3, 6].includes(anchorPoint)) {
 		hor = Math.max(hor / (1 + fontSizeIncrement * 2), 2);
 		console.log("Adjusted hor for left anchor:", hor);
 	}
