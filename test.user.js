@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         MWeb Youtube Captions Patch (dev)
 // @author       Sukinyu
-// @version      23
+// @version      25
 // @match        https://m.youtube.com/*
 // @updateURL    https://github.com/Sukinyu/youtube-ios-caption-patch/raw/refs/heads/main/test.user.js
 // @downloadURL  https://github.com/Sukinyu/youtube-ios-caption-patch/raw/refs/heads/main/test.user.js
@@ -486,6 +486,7 @@ function generatePenStyles() {
 	const vRect = video?.getBoundingClientRect();
 	const fs = calculateBaseFontSize(vRect?.width, vRect?.height);
 	let style = `::cue(c) { font-family: ${defaultFont}; font-size: ${fs}px; line-height: normal;${isMWEB ? " font-weight: 500;" : ""}}\n`;
+	style += `.ytp-caption-window-container { width : 100%; }\n`;
 
 	for (let i = 0; i < currentPens.length; i++) {
 		const pen = currentPens[i];
@@ -797,15 +798,16 @@ if (video?.src) {
 	}).observe(video, { attributeFilter: ["src"] });
 }
 
-/*
+
 video.onwebkitfullscreenchange = () => {
-	if (inFullscreen) {
+	alert("Fullscreen change detected. Updating caption visibility.");
+	if (inFullscreen()) {
 		video?.textTracks[0] && (video.textTracks[0].mode = "showing");
 	} else {
 		video?.textTracks[0] && (video.textTracks[0].mode = "hidden");
 	}
 };
-*/
+
 
 function createCaptionEditorButton(openEditor) {
 	const existing = document.getElementById("caption-editor-btn");
