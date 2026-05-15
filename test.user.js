@@ -752,7 +752,7 @@ const po = new PerformanceObserver((list) => {
 				`Injected CC${translated ? " (TS)" : ""}`,
 				userLang,
 			);
-			track.mode = "showing";
+			track.mode = "hidden";
 			console.log("Injected captions track");
 		} else {
 			if (track.cues) {
@@ -799,8 +799,7 @@ if (video?.src) {
 }
 
 
-video.onwebkitfullscreenchange = () => {
-	alert("Fullscreen change detected. Updating caption visibility.");
+video.onfullscreenchange = () => {
 	if (inFullscreen()) {
 		video?.textTracks[0] && (video.textTracks[0].mode = "showing");
 	} else {
