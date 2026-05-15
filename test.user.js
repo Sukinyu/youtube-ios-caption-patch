@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         MWeb Youtube Captions Patch (dev)
 // @author       Sukinyu
-// @version      20
+// @version      21
 // @match        https://m.youtube.com/*
 // @updateURL    https://github.com/Sukinyu/youtube-ios-caption-patch/raw/refs/heads/main/test.user.js
 // @downloadURL  https://github.com/Sukinyu/youtube-ios-caption-patch/raw/refs/heads/main/test.user.js
@@ -234,7 +234,6 @@ function openEditor(cue) {
 		),
 	);
 
-	// --- Alignment (THIS is your current bug source) ---
 	editor.appendChild(
 		dropdown(
 			"align",
@@ -384,7 +383,7 @@ const parseJson3 = (json) => {
 };
 
 function penToCss(pen) {
-	if (!pen) return "color: rgba(255,255,255,1);";
+	if (!pen) return "color: rgba(255,255,255,1);"; // idk really...
 
 	// Get video dimensions for font size calculation
 	const videoRect = video?.getBoundingClientRect();
@@ -405,7 +404,9 @@ function penToCss(pen) {
 	const backAlpha = rd(pen.boBackAlpha != null ? pen.boBackAlpha / 255 : 0.5);
 
 	const colorCss =
-		c != "0,0,0" || foreAlpha != 1 ? `color: rgba(${c},${foreAlpha});` : "";
+		c != "255,255,255" || foreAlpha != 1 ?
+			`color: rgba(${c},${foreAlpha});`
+		:	"";
 
 	const backgroundCss =
 		backAlpha != 0 ? `background: rgba(${cB},${backAlpha});` : "";
@@ -487,11 +488,15 @@ function generatePenStyles() {
 	const vRect = video?.getBoundingClientRect();
 	const fs = calculateBaseFontSize(vRect?.width, vRect?.height);
 	let style = `::cue(c) { font-family: ${defaultFont}; font-size: ${fs}px; line-height: normal;${isMWEB ? " font-weight: 500;" : ""}}\n`;
-	style += `::cue(.bg) { background: rgba(0,0,0,0.5); }\n\n`;
+	//style += `::cue(.bg) { background: rgba(0,0,0,0.5); }\n\n`;
 
 	for (let i = 0; i < currentPens.length; i++) {
 		const pen = currentPens[i];
-		if (!pen || Object.keys(pen).length === 0) continue;
+		if (!pen) continue;
+		if (i == 0) {
+			style += `::cue(.d) { ${penToCss(pen)} }\n\n`; // Default pen
+			continue;
+		}
 		style += `::cue(.pen${i}) { ${penToCss(pen)} }\n`;
 	}
 	return style;
@@ -586,22 +591,20 @@ function mapPosToCue(pos, pen, style) {
  */
 function addCuesToTrack(track, json, isAutoGen) {
 	const events = json.events || [];
-	const pens = json.pens || [];
+	const pens = json.pens || [{}];
 	const wpWinPositions = json.wpWinPositions || [];
 	const wsWinStyles = json.wsWinStyles || [];
 
+	// Best solution I can think of rn
+	// TODO: Find a better solution
+	isMWEB && (pens[0].szPenSize ??= 200);
+
 	// Store pens globally for resize updates
 	currentPens = pens;
-
 	updateCaptionStyles();
 
 	// ---------- build CSS from pens + positions ----------
 	const style = generatePenStyles();
-	if (isAutoGen && isMWEB) {
-		pens.forEach((pen) => {
-			pen.szPenSize = 150; // Default to 150%
-		});
-	}
 	if (style) setCaptionStyle(style);
 
 	const win = [];
@@ -653,9 +656,9 @@ function addCuesToTrack(track, json, isAutoGen) {
 				parts.push(`<${ts(ev.tStartMs + seg.tOffsetMs, true)}>`); // Karaoke timing
 			}
 
-			const penId = seg.pPenId != null ? seg.pPenId : ev.pPenId;
+			const penId = seg.pPenId ?? ev.pPenId ?? 0;
 
-			parts.push(penId != null ? `<c.pen${penId}>` : `<c.bg>`);
+			parts.push(penId ? `<c.pen${penId}>` : `<c.d>`);
 			parts.push(seg.utf8);
 			parts.push("</c>");
 		});
@@ -770,7 +773,6 @@ const po = new PerformanceObserver((list) => {
 				t.label.includes("Injected CC"),
 			);
 		if (!track) {
-			video || (video = document.querySelector("video"));
 			track = video.addTextTrack(
 				"captions",
 				`Injected CC${translated ? " (TS)" : ""}`,
