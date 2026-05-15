@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         MWeb Youtube Captions Patch (dev)
 // @author       Sukinyu
-// @version      21
+// @version      23
 // @match        https://m.youtube.com/*
 // @updateURL    https://github.com/Sukinyu/youtube-ios-caption-patch/raw/refs/heads/main/test.user.js
 // @downloadURL  https://github.com/Sukinyu/youtube-ios-caption-patch/raw/refs/heads/main/test.user.js
@@ -483,12 +483,9 @@ function setCaptionStyle(cssText) {
 }
 
 function generatePenStyles() {
-	if (currentPens.length === 0) return null;
-
 	const vRect = video?.getBoundingClientRect();
 	const fs = calculateBaseFontSize(vRect?.width, vRect?.height);
 	let style = `::cue(c) { font-family: ${defaultFont}; font-size: ${fs}px; line-height: normal;${isMWEB ? " font-weight: 500;" : ""}}\n`;
-	//style += `::cue(.bg) { background: rgba(0,0,0,0.5); }\n\n`;
 
 	for (let i = 0; i < currentPens.length; i++) {
 		const pen = currentPens[i];
@@ -502,61 +499,39 @@ function generatePenStyles() {
 	return style;
 }
 
+const LEFT_ANCHORS = new Set([0, 3, 6]);
+const RIGHT_ANCHORS = new Set([2, 5, 8]);
+
 /** @param {Json3WinPos} pos @param {Json3Pen} pen @param {Json3WinStyle} style */
 function mapPosToCue(pos, pen, style) {
 	pos || (pos = { avVerPos: 100, ahHorPos: 50, apPoint: 7 });
 
 	const anchorPoint = pos.apPoint;
 	const hasAnchor = anchorPoint != null;
+	const verPos = pos.avVerPos ?? (isMWEB ? 93 : 98);
 
-	let ver =
-		isMWEB ?
-			pos.avVerPos != null ?
-				pos.avVerPos * 0.91 + 2
-			:	93
-		: pos.avVerPos != null ? pos.avVerPos * 0.96 + 2
-		: 98;
-
-	let hor = pos.ahHorPos != null ? pos.ahHorPos * 0.96 + 2 : 50;
+	//let ver = isMWEB ? verPos * 0.91 + 2 : verPos * 0.96 + 2;
+	let ver = verPos * 0.96 + 2;
+	let hor = (pos.ahHorPos ?? 50) * 0.96 + 2;
 
 	const fontSizeIncrement = pen?.szPenSize ? pen.szPenSize / 100 - 1 : 0;
-	if (hasAnchor && [0, 3, 6].includes(anchorPoint)) {
+	if (hasAnchor && LEFT_ANCHORS.has(anchorPoint)) {
 		hor = Math.max(hor / (1 + fontSizeIncrement * 2), 2);
-		console.log("Adjusted hor for left anchor:", hor);
 	}
 
-	let align = "";
-	let positionAlign = "";
-	let lineAlign = undefined;
+	let align =
+		LEFT_ANCHORS.has(anchorPoint) ? "left"
+		: RIGHT_ANCHORS.has(anchorPoint) ? "right"
+		: "";
+	let positionAlign =
+		LEFT_ANCHORS.has(anchorPoint) ? "line-left"
+		: RIGHT_ANCHORS.has(anchorPoint) ? "line-right"
+		: "";
+	let lineAlign =
+		anchorPoint >= 3 && anchorPoint <= 5 ? "center"
+		: anchorPoint >= 6 ? "end"
+		: undefined;
 	let vertical = "";
-
-	switch (anchorPoint) {
-		case 0:
-		case 3:
-		case 6:
-			align = "left"; // A required assumption
-			positionAlign = "line-left";
-			break;
-		case 2:
-		case 5:
-		case 8:
-			align = "right"; // A required assumption
-			positionAlign = "line-right";
-			break;
-	}
-
-	switch (anchorPoint) {
-		case 3:
-		case 4:
-		case 5:
-			lineAlign = "center";
-			break;
-		case 6:
-		case 7:
-		case 8:
-			lineAlign = "end";
-			break;
-	}
 
 	switch (style?.juJustifCode) {
 		case 0:
@@ -614,7 +589,7 @@ function addCuesToTrack(track, json, isAutoGen) {
 	const style = generatePenStyles();
 	if (style) setCaptionStyle(style);
 
-	const win = [];
+	const windowMap = new Map();
 
 	// ---------- build cues ----------
 	for (const ev of events) {
@@ -623,15 +598,13 @@ function addCuesToTrack(track, json, isAutoGen) {
 
 		if (!ev.segs && ev?.id) {
 			// Handle events with no segments but have an ID (possible metadata or positioning cues)
-			let container = {
+			windowMap.set(ev.id, {
 				start: start,
 				end: end,
-				id: ev.id,
 				penId: ev.pPenId,
 				posId: ev.wpWinPosId,
 				styleId: ev.wsWinStyleId,
-			};
-			win.push(container);
+			});
 			continue;
 		}
 
@@ -639,20 +612,12 @@ function addCuesToTrack(track, json, isAutoGen) {
 		const parts = [];
 
 		if (ev.wWinId != null) {
-			let current; // Search for the corresponding window definition
-			for (current = 0; current <= win.length; current++) {
-				if (
-					win[current].id === ev.wWinId &&
-					win[current].start <= start &&
-					win[current].end >= end
-				) {
-					break;
-				}
+			const winData = windowMap.get(ev.wWinId);
+			if (winData && winData.start <= start && winData.end >= end) {
+				ev.wpWinPosId ??= winData.posId;
+				ev.pPenId ??= winData.penId;
+				ev.wsWinStyleId ??= winData.styleId;
 			}
-			const winData = win[current] || {};
-			ev.wpWinPosId ??= winData.posId;
-			ev.pPenId ??= winData.penId;
-			ev.wsWinStyleId ??= winData.styleId;
 		}
 
 		ev.segs.forEach((seg) => {
@@ -685,14 +650,12 @@ function addCuesToTrack(track, json, isAutoGen) {
 			eventStyle = wsWinStyles[ev.wsWinStyleId ?? -1];
 		const placement = mapPosToCue(pos, eventPen, eventStyle);
 
-		cue.line = placement?.line;
-		if (placement.position != null) {
-			cue.position = rd(placement.position, 2);
-		}
-		placement.align && (cue.align = placement.align);
-		placement.positionAlign && (cue.positionAlign = placement.positionAlign);
-		placement.lineAlign && (cue.lineAlign = placement.lineAlign);
-		placement.vertical && (cue.vertical = placement.vertical);
+		cue.line = placement.line;
+		if (placement.position != null) cue.position = rd(placement.position, 2);
+		if (placement.align) cue.align = placement.align;
+		if (placement.positionAlign) cue.positionAlign = placement.positionAlign;
+		if (placement.lineAlign) cue.lineAlign = placement.lineAlign;
+		if (placement.vertical) cue.vertical = placement.vertical;
 
 		track.addCue(cue);
 	}
