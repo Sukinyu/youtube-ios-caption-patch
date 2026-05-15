@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         MWeb Youtube Captions Patch (beta)
 // @author       Sukinyu
-// @version      1.0.23
-// @last         5/14/2026 (mm/dd/yyyy)
+// @version      1.0.24
+// @last         5/15/2026 (mm/dd/yyyy)
 // @description  Fix captions on youtube videos in webkit fullscreen mode on iOS (https://m.youtube.com/).
 // @match        https://m.youtube.com/*
 // @updateURL    https://github.com/Sukinyu/youtube-ios-caption-patch/raw/refs/heads/main/beta.user.js
@@ -96,7 +96,9 @@ function penToCss(pen) {
 	const backAlpha = rd(pen.boBackAlpha != null ? pen.boBackAlpha / 255 : 0.5);
 
 	const colorCss =
-		c != "0,0,0" || foreAlpha != 1 ? `color: rgba(${c},${foreAlpha});` : "";
+		c != "255,255,255" || foreAlpha != 1 ?
+			`color: rgba(${c},${foreAlpha});`
+		:	"";
 
 	const backgroundCss =
 		backAlpha != 0 ? `background: rgba(${cB},${backAlpha});` : "";
@@ -173,68 +175,54 @@ function setCaptionStyle(cssText) {
 }
 
 function generatePenStyles() {
-	if (currentPens.length === 0) return null;
-
 	const vRect = video?.getBoundingClientRect();
 	const fs = calculateBaseFontSize(vRect?.width, vRect?.height);
 	let style = `::cue(c) { font-family: ${defaultFont}; font-size: ${fs}px; line-height: normal;${isMWEB ? " font-weight: 500;" : ""}}\n`;
-	style += `::cue(.bg) { background: rgba(0,0,0,0.5); }\n\n`;
+	style += `.ytp-caption-window-container { width : 100%; }\n`;
 
 	for (let i = 0; i < currentPens.length; i++) {
 		const pen = currentPens[i];
-		if (!pen || Object.keys(pen).length === 0) continue;
+		if (!pen) continue;
+		if (i == 0) {
+			style += `::cue(.d) { ${penToCss(pen)} }\n\n`; // Default pen
+			continue;
+		}
 		style += `::cue(.pen${i}) { ${penToCss(pen)} }\n`;
 	}
 	return style;
 }
 
+const LEFT_ANCHORS = new Set([0, 3, 6]);
+const RIGHT_ANCHORS = new Set([2, 5, 8]);
+
 function mapPosToCue(pos, pen, style) {
-	pos || (pos = { avVerPos: 95, ahHorPos: 50, apPoint: 7 });
+	pos || (pos = { avVerPos: 100, ahHorPos: 50, apPoint: 7 });
 
 	const anchorPoint = pos.apPoint;
 	const hasAnchor = anchorPoint != null;
+	const verPos = pos.avVerPos ?? (isMWEB ? 93 : 98);
 
-	let ver = pos.avVerPos != null ? pos.avVerPos * 0.96 + 2 : 0;
-	let hor = pos.ahHorPos != null ? pos.ahHorPos * 0.96 + 2 : 50;
+	let ver = isMWEB ? verPos * 0.91 + 2 : verPos * 0.96 + 2;
+	let hor = (pos.ahHorPos ?? 50) * 0.96 + 2;
 
 	const fontSizeIncrement = pen?.szPenSize ? pen.szPenSize / 100 - 1 : 0;
-	if (hasAnchor && [0, 3, 6].includes(anchorPoint)) {
+	if (hasAnchor && LEFT_ANCHORS.has(anchorPoint)) {
 		hor = Math.max(hor / (1 + fontSizeIncrement * 2), 2);
-		console.log("Adjusted hor for left anchor:", hor);
 	}
 
-	let align = "";
-	let positionAlign = "";
-	let lineAlign = undefined;
+	let align =
+		LEFT_ANCHORS.has(anchorPoint) ? "left"
+		: RIGHT_ANCHORS.has(anchorPoint) ? "right"
+		: "";
+	let positionAlign =
+		LEFT_ANCHORS.has(anchorPoint) ? "line-left"
+		: RIGHT_ANCHORS.has(anchorPoint) ? "line-right"
+		: "";
+	let lineAlign =
+		anchorPoint >= 3 && anchorPoint <= 5 ? "center"
+		: anchorPoint >= 6 ? "end"
+		: undefined;
 	let vertical = "";
-
-	switch (anchorPoint) {
-		case 0:
-		case 3:
-		case 6:
-			align = "left"; // A required assumption
-			positionAlign = "line-left";
-			break;
-		case 2:
-		case 5:
-		case 8:
-			align = "right"; // A required assumption
-			positionAlign = "line-right";
-			break;
-	}
-
-	switch (anchorPoint) {
-		case 3:
-		case 4:
-		case 5:
-			lineAlign = "center";
-			break;
-		case 6:
-		case 7:
-		case 8:
-			lineAlign = "end";
-			break;
-	}
 
 	switch (style?.juJustifCode) {
 		case 0:
@@ -275,21 +263,19 @@ function addCuesToTrack(track, json, isAutoGen) {
 	const wpWinPositions = json.wpWinPositions || [];
 	const wsWinStyles = json.wsWinStyles || [];
 
+	// Best solution I can think of rn
+	// TODO: Find a better solution
+	isMWEB && (pens[0].szPenSize ??= 200);
+
 	// Store pens globally for resize updates
 	currentPens = pens;
-
 	updateCaptionStyles();
 
 	// ---------- build CSS from pens + positions ----------
 	const style = generatePenStyles();
-	if (isAutoGen && isMWEB) {
-		pens.forEach((pen) => {
-			pen.szPenSize = 150; // Default to 150%
-		});
-	}
 	if (style) setCaptionStyle(style);
 
-	const win = [];
+	const windowMap = new Map();
 
 	// ---------- build cues ----------
 	for (const ev of events) {
@@ -298,35 +284,25 @@ function addCuesToTrack(track, json, isAutoGen) {
 
 		if (!ev.segs && ev?.id) {
 			// Handle events with no segments but have an ID (possible metadata or positioning cues)
-			let container = {
+			windowMap.set(ev.id, {
 				start: start,
 				end: end,
-				id: ev.id,
 				penId: ev.pPenId,
 				posId: ev.wpWinPosId,
 				styleId: ev.wsWinStyleId,
-			};
-			win.push(container);
+			});
 			continue;
 		}
 
 		const parts = [];
 
 		if (ev.wWinId != null) {
-			let current; // Search for the corresponding window definition
-			for (current = 0; current <= win.length; current++) {
-				if (
-					win[current].id === ev.wWinId &&
-					win[current].start <= start &&
-					win[current].end >= end
-				) {
-					break;
-				}
-			}
-			const winData = win[current] || {};
+			const winData = windowMap.get(ev.wWinId);
+			if (winData && winData.start <= start && winData.end >= end) {
 			ev.wpWinPosId ??= winData.posId;
 			ev.pPenId ??= winData.penId;
 			ev.wsWinStyleId ??= winData.styleId;
+			}
 		}
 
 		ev.segs.forEach((seg) => {
@@ -337,13 +313,17 @@ function addCuesToTrack(track, json, isAutoGen) {
 				parts.push(`<${ts(ev.tStartMs + seg.tOffsetMs, true)}>`); // Karaoke timing
 			}
 
-			const penId = seg.pPenId != null ? seg.pPenId : ev.pPenId;
+			const penId = seg.pPenId ?? ev.pPenId ?? 0;
 
-			parts.push(penId != null ? `<c.pen${penId}>` : `<c.bg>`);
+			let p = pens[penId];
+			if (!p.foForeAlpha && !p.boBackAlpha && !p.etEdgeType) return; // Skip invisible pens
+
+			parts.push(penId ? `<c.pen${penId}>` : `<c.d>`);
 			parts.push(seg.utf8);
 			parts.push("</c>");
 		});
 
+		if (parts.length === 0) continue; // Skip cues with no text
 		if (parts.length === 3 && parts[1] == "\n") continue; // Skip empty cues from auto-gen
 
 		let cueText = parts.join("");
@@ -355,18 +335,16 @@ function addCuesToTrack(track, json, isAutoGen) {
 
 		// Get position data for this event
 		const pos = wpWinPositions[ev.wpWinPosId ?? -1],
-			eventPen = pens[ev.pPenId ?? -1],
+			eventPen = pens[ev.pPenId ?? 0],
 			eventStyle = wsWinStyles[ev.wsWinStyleId ?? -1];
 		const placement = mapPosToCue(pos, eventPen, eventStyle);
 
-		cue.line = placement?.line;
-		if (placement.position != null) {
-			cue.position = rd(placement.position, 2);
-		}
-		placement.align && (cue.align = placement.align);
-		placement.positionAlign && (cue.positionAlign = placement.positionAlign);
-		placement.lineAlign && (cue.lineAlign = placement.lineAlign);
-		placement.vertical && (cue.vertical = placement.vertical);
+		cue.line = placement.line;
+		if (placement.position != null) cue.position = rd(placement.position, 2);
+		if (placement.align) cue.align = placement.align;
+		if (placement.positionAlign) cue.positionAlign = placement.positionAlign;
+		if (placement.lineAlign) cue.lineAlign = placement.lineAlign;
+		if (placement.vertical) cue.vertical = placement.vertical;
 
 		track.addCue(cue);
 	}
@@ -454,13 +432,12 @@ const po = new PerformanceObserver((list) => {
 				t.label.includes("Injected CC"),
 			);
 		if (!track) {
-			video || (video = document.querySelector("video"));
 			track = video.addTextTrack(
 				"captions",
 				`Injected CC${translated ? " (TS)" : ""}`,
 				userLang,
 			);
-			track.mode = "showing";
+			track.mode = "hidden";
 			console.log("Injected captions track");
 		} else {
 			if (track.cues) {
