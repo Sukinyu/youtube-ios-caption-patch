@@ -510,8 +510,7 @@ function mapPosToCue(pos, pen, style) {
 	const hasAnchor = anchorPoint != null;
 	const verPos = pos.avVerPos ?? (isMWEB ? 93 : 98);
 
-	//let ver = isMWEB ? verPos * 0.91 + 2 : verPos * 0.96 + 2;
-	let ver = verPos * 0.96 + 2;
+	let ver = isMWEB ? verPos * 0.91 + 2 : verPos * 0.96 + 2;
 	let hor = (pos.ahHorPos ?? 50) * 0.96 + 2;
 
 	const fontSizeIncrement = pen?.szPenSize ? pen.szPenSize / 100 - 1 : 0;
@@ -630,11 +629,15 @@ function addCuesToTrack(track, json, isAutoGen) {
 
 			const penId = seg.pPenId ?? ev.pPenId ?? 0;
 
+			let p = pens[penId];
+			if (!p.foForeAlpha && !p.boBackAlpha && !p.etEdgeType) return; // Skip invisible pens
+
 			parts.push(penId ? `<c.pen${penId}>` : `<c.d>`);
 			parts.push(seg.utf8);
 			parts.push("</c>");
 		});
 
+		if (parts.length === 0) continue; // Skip cues with no text
 		if (parts.length === 3 && parts[1] == "\n") continue; // Skip empty cues from auto-gen
 
 		let cueText = parts.join("");
