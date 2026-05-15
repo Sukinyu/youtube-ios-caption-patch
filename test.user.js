@@ -674,7 +674,7 @@ function addCuesToTrack(track, json, isAutoGen) {
 
 		// Get position data for this event
 		const pos = wpWinPositions[ev.wpWinPosId ?? -1],
-			eventPen = pens[ev.pPenId ?? -1],
+			eventPen = pens[ev.pPenId ?? 0],
 			eventStyle = wsWinStyles[ev.wsWinStyleId ?? -1];
 		const placement = mapPosToCue(pos, eventPen, eventStyle);
 
