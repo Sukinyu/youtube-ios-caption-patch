@@ -798,16 +798,13 @@ if (video?.src) {
 	}).observe(video, { attributeFilter: ["src"] });
 }
 
-video?.addEventListener(
-	"resize orientationchange webkitfullscreenchange mozfullscreenchange fullscreenchange",
-	() => {
-		if (inFullscreen()) {
-			video?.textTracks[0] && (video.textTracks[0].mode = "showing");
-		} else {
-			video?.textTracks[0] && (video.textTracks[0].mode = "hidden");
-		}
-	},
-);
+video.webkitbeginfullscreen = () => {
+	if (inFullscreen()) {
+		video?.textTracks[0] && (video.textTracks[0].mode = "showing");
+	} else {
+		video?.textTracks[0] && (video.textTracks[0].mode = "hidden");
+	}
+};
 
 function createCaptionEditorButton(openEditor) {
 	const existing = document.getElementById("caption-editor-btn");
