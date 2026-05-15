@@ -504,12 +504,19 @@ function generatePenStyles() {
 
 /** @param {Json3WinPos} pos @param {Json3Pen} pen @param {Json3WinStyle} style */
 function mapPosToCue(pos, pen, style) {
-	pos || (pos = { avVerPos: 95, ahHorPos: 50, apPoint: 7 });
+	pos || (pos = { avVerPos: 100, ahHorPos: 50, apPoint: 7 });
 
 	const anchorPoint = pos.apPoint;
 	const hasAnchor = anchorPoint != null;
 
-	let ver = pos.avVerPos != null ? pos.avVerPos * 0.96 + 2 : 0;
+	let ver =
+		isMWEB ?
+			pos.avVerPos != null ?
+				pos.avVerPos * 0.91 + 2
+			:	93
+		: pos.avVerPos != null ? pos.avVerPos * 0.96 + 2
+		: 98;
+
 	let hor = pos.ahHorPos != null ? pos.ahHorPos * 0.96 + 2 : 50;
 
 	const fontSizeIncrement = pen?.szPenSize ? pen.szPenSize / 100 - 1 : 0;
