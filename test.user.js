@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         MWeb Youtube Captions Patch (dev)
 // @author       Sukinyu
-// @version      31
+// @version      32
 // @match        https://m.youtube.com/*
 // @updateURL    https://github.com/Sukinyu/youtube-ios-caption-patch/raw/refs/heads/main/test.user.js
 // @downloadURL  https://github.com/Sukinyu/youtube-ios-caption-patch/raw/refs/heads/main/test.user.js
@@ -413,7 +413,7 @@ function getVideoSize(video) {
 	};
 }
 
-function penToCss(pen) {
+function penToCss(pen, ignore_fs = false) {
 	if (!pen) return "color: rgba(255,255,255,1);";
 
 	// Get video dimensions for font size calculation
@@ -423,10 +423,9 @@ function penToCss(pen) {
 	let fs = calculateBaseFontSize(vRect.width, vRect.height);
 
 	// Font size multiplier (YouTube's SzJ function)
-	const fontSizeIncrement = pen.szPenSize ? pen.szPenSize / 100 - 1 : 0;
-	let fontSizeMultiplier = 1 + 0.25 * fontSizeIncrement;
-	const fontSizeCss =
-		fontSizeMultiplier !== 1 ? `font-size: ${89 * fontSizeMultiplier}%;` : "";
+	const fsIncrement = pen.szPenSize ? pen.szPenSize / 100 - 1 : 0;
+	let fsMult = 1 + 0.25 * (ignore_fs && fsIncrement === 1 ? 0 : fsIncrement);
+	const fontSizeCss = fsMult !== 1 ? `font-size: ${89 * fsMult}%;` : "";
 
 	// Colors
 	const c = rgb(pen.fcForeColor ?? 0xffffff);
@@ -514,14 +513,15 @@ function setCaptionStyle(cssText) {
 }
 
 function generatePenStyles() {
-	let style = `::cue(c) { font-family: ${defaultFont}; font-size: ${isMWEB ? 111.25 : 89}%; line-height: normal;${isMWEB ? " font-weight: 500;" : ""}}\n`;
+	const fs = currentPens[0]?.szPenSize ? currentPens[0].szPenSize * 89 : 89;
+	let style = `::cue(c) { font-family: ${defaultFont}; font-size: ${fs}%; line-height: normal;${isMWEB ? " font-weight: 500;" : ""}}\n`;
 	style += `.ytp-caption-window-container { width : 100%; }\n`;
 
 	for (let i = 0; i < currentPens.length; i++) {
 		const pen = currentPens[i];
 		if (!pen) continue;
 		if (i == 0) {
-			style += `::cue(.d) { ${penToCss(pen)} }\n\n`; // Default pen
+			style += `::cue(.d) { ${penToCss(pen, true)} }\n\n`; // Default pen
 			continue;
 		}
 		style += `::cue(.pen${i}) { ${penToCss(pen)} }\n`;
@@ -586,7 +586,7 @@ function mapPosToCue(pos, pen, style) {
 	}
 
 	return {
-		line: rd(ver, 2),
+		line: Math.max(rd(ver, 2), 0),
 		position: rd(hor, 2), // defaults to 'auto'
 		align: align, // defaults to 'center'
 		positionAlign: positionAlign, // Defaults to 'auto'
@@ -608,7 +608,7 @@ function addCuesToTrack(track, json, isAutoGen) {
 
 	// Best solution I can think of rn
 	// TODO: Find a better solution
-	isMWEB && (pens[0].szPenSize ??= 200);
+	isAutoGen && isMWEB && (pens[0].szPenSize ??= 200);
 
 	// Store pens globally for resize updates
 	currentPens = pens;
