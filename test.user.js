@@ -424,7 +424,7 @@ function penToCss(pen) {
 
 	// Font size multiplier (YouTube's SzJ function)
 	const fontSizeIncrement = pen.szPenSize ? pen.szPenSize / 100 - 1 : 0;
-	let fontSizeMultiplier = 1 + 0.25 * fontSizeIncrement;
+	let fontSizeMultiplier = 0.25 * fontSizeIncrement + 1;
 	const fontSizeCss =
 		fontSizeMultiplier !== 1 ? `font-size: ${89 * fontSizeMultiplier}%;` : "";
 
