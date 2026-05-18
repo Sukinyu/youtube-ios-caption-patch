@@ -259,7 +259,7 @@ function mapPosToCue(pos, pen, style) {
 
 function addCuesToTrack(track, json, isAutoGen) {
 	const events = json.events || [];
-	const pens = json.pens || [];
+	const pens = json.pens || [{}];
 	const wpWinPositions = json.wpWinPositions || [];
 	const wsWinStyles = json.wsWinStyles || [];
 
