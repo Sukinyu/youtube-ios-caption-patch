@@ -424,7 +424,7 @@ function penToCss(pen) {
 
 	// Font size multiplier (YouTube's SzJ function)
 	const fontSizeIncrement = pen.szPenSize ? pen.szPenSize / 100 - 1 : 0;
-	let fontSizeMultiplier = 0.25 * fontSizeIncrement + 1;
+	let fontSizeMultiplier = 1 + 0.25 * fontSizeIncrement;
 	const fontSizeCss =
 		fontSizeMultiplier !== 1 ? `font-size: ${89 * fontSizeMultiplier}%;` : "";
 
@@ -514,7 +514,7 @@ function setCaptionStyle(cssText) {
 }
 
 function generatePenStyles() {
-	let style = `::cue(c) { font-family: ${defaultFont}; font-size: 89%; line-height: normal;${isMWEB ? " font-weight: 500;" : ""}}\n`;
+	let style = `::cue(c) { font-family: ${defaultFont}; font-size: ${isMWEB ? 111.25 : 89}%; line-height: normal;${isMWEB ? " font-weight: 500;" : ""}}\n`;
 	style += `.ytp-caption-window-container { width : 100%; }\n`;
 
 	for (let i = 0; i < currentPens.length; i++) {
