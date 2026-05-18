@@ -329,7 +329,7 @@ function calculateBaseFontSize(videoWidth, videoHeight) {
 		const threshold = videoHeight > videoWidth * 1.3 ? 480 : 640;
 		baseSize = (videoWidth / threshold) * 16;
 	}
-	return 89 //rd(baseSize);
+	return rd(baseSize);
 }
 
 function ts(ms, format = false) {
@@ -426,7 +426,7 @@ function penToCss(pen) {
 	const fontSizeIncrement = pen.szPenSize ? pen.szPenSize / 100 - 1 : 0;
 	let fontSizeMultiplier = 1 + 0.25 * fontSizeIncrement;
 	const fontSizeCss =
-		fontSizeMultiplier !== 1 ? `font-size: ${fs * fontSizeMultiplier}%;` : "";
+		fontSizeMultiplier !== 1 ? `font-size: ${89 * fontSizeMultiplier}%;` : "";
 
 	// Colors
 	const c = rgb(pen.fcForeColor ?? 0xffffff);
@@ -514,9 +514,7 @@ function setCaptionStyle(cssText) {
 }
 
 function generatePenStyles() {
-	const vRect = getVideoSize(video);
-	const fs = calculateBaseFontSize(vRect.width, vRect.height);
-	let style = `::cue(c) { font-family: ${defaultFont}; font-size: ${fs}%; line-height: normal;${isMWEB ? " font-weight: 500;" : ""}}\n`;
+	let style = `::cue(c) { font-family: ${defaultFont}; font-size: 89%; line-height: normal;${isMWEB ? " font-weight: 500;" : ""}}\n`;
 	style += `.ytp-caption-window-container { width : 100%; }\n`;
 
 	for (let i = 0; i < currentPens.length; i++) {
@@ -542,7 +540,7 @@ function mapPosToCue(pos, pen, style) {
 	const hasAnchor = anchorPoint != null;
 	const verPos = pos.avVerPos ?? (isMWEB ? 93 : 98);
 
-	let ver = isMWEB ? verPos * 0.91 + 2 : verPos * 0.96 + 2;
+	let ver = /*isMWEB ? verPos * 0.91 + 2 :*/ verPos * 0.96 + 2;
 	let hor = (pos.ahHorPos ?? 50) * 0.96 + 2;
 
 	const fontSizeIncrement = pen?.szPenSize ? pen.szPenSize / 100 - 1 : 0;
