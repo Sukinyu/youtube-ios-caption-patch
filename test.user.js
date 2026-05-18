@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         MWeb Youtube Captions Patch (dev)
 // @author       Sukinyu
-// @version      32
+// @version      33
 // @match        https://m.youtube.com/*
 // @updateURL    https://github.com/Sukinyu/youtube-ios-caption-patch/raw/refs/heads/main/test.user.js
 // @downloadURL  https://github.com/Sukinyu/youtube-ios-caption-patch/raw/refs/heads/main/test.user.js
@@ -540,7 +540,7 @@ function mapPosToCue(pos, pen, style) {
 	const hasAnchor = anchorPoint != null;
 	const verPos = pos.avVerPos ?? (isMWEB ? 93 : 98);
 
-	let ver = /*isMWEB ? verPos * 0.91 + 2 :*/ verPos * 0.96 + 2;
+	let ver = isMWEB ? verPos * 0.92 + 2 : verPos * 0.96 + 2;
 	let hor = (pos.ahHorPos ?? 50) * 0.96 + 2;
 
 	const fontSizeIncrement = pen?.szPenSize ? pen.szPenSize / 100 - 1 : 0;
@@ -617,7 +617,6 @@ function addCuesToTrack(track, json, isAutoGen) {
 	// ---------- build CSS from pens + positions ----------
 	const style = generatePenStyles();
 	if (style) setCaptionStyle(style);
-	alert(style);
 
 	const windowMap = new Map();
 
@@ -661,8 +660,8 @@ function addCuesToTrack(track, json, isAutoGen) {
 			const penId = seg.pPenId ?? ev.pPenId ?? 0;
 
 			let p = pens[penId];
-			if (!(p.foForeAlpha || 1) && !(p.boBackAlpha || 1) && !p.etEdgeType)
-				return; // Skip invisible pens
+			if (!(p.foForeAlpha || 1) && !(p.boBackAlpha || 1) /*&& !p.etEdgeType*/)
+				return; // Skip invisible pens // TODO: Handle invisible pens with edge effects instead of removing
 
 			parts.push(penId ? `<c.pen${penId}>` : `<c.d>`);
 			parts.push(seg.utf8);

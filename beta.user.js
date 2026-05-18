@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         MWeb Youtube Captions Patch (beta)
 // @author       Sukinyu
-// @version      1.0.24
-// @last         5/15/2026 (mm/dd/yyyy)
+// @version      1.0.25
+// @last         5/18/2026 (mm/dd/yyyy)
 // @description  Fix captions on youtube videos in webkit fullscreen mode on iOS (https://m.youtube.com/).
 // @match        https://m.youtube.com/*
 // @updateURL    https://github.com/Sukinyu/youtube-ios-caption-patch/raw/refs/heads/main/beta.user.js
@@ -74,20 +74,46 @@ const parseJson3 = (json) => {
 	}
 };
 
-function penToCss(pen) {
+function getVideoSize(video) {
+	if (!video) return { width: 0, height: 0 };
+	if (!video?.webkitDisplayingFullscreen) {
+		return { width: video.clientWidth, height: video.clientHeight };
+	}
+	const vw = video.videoWidth;
+	const vh = video.videoHeight;
+
+	const cw = window.innerWidth;
+	const ch = window.innerHeight;
+
+	const videoAspect = vw / vh;
+	const containerAspect = cw / ch;
+
+	if (videoAspect > containerAspect) {
+		return {
+			width: cw,
+			height: cw / videoAspect,
+		};
+	}
+
+	return {
+		width: ch * videoAspect,
+		height: ch,
+	};
+}
+
+function penToCss(pen, ignore_fs = false) {
 	if (!pen) return "color: rgba(255,255,255,1);";
 
 	// Get video dimensions for font size calculation
-	const videoRect = video?.getBoundingClientRect();
+	const vRect = getVideoSize(video);
 
 	// Calculate base font percent (YouTube's N3e function)
-	let fs = calculateBaseFontSize(videoRect?.width, videoRect?.height);
+	let fs = calculateBaseFontSize(vRect.width, vRect.height);
 
 	// Font size multiplier (YouTube's SzJ function)
-	const fontSizeIncrement = pen.szPenSize ? pen.szPenSize / 100 - 1 : 0;
-	let fontSizeMultiplier = 1 + 0.25 * fontSizeIncrement;
-	const fontSizeCss =
-		fontSizeMultiplier !== 1 ? `font-size: ${fs * fontSizeMultiplier}px;` : "";
+	const fsIncrement = pen.szPenSize ? pen.szPenSize / 100 - 1 : 0;
+	let fsMult = 1 + 0.25 * (ignore_fs && fsIncrement === 1 ? 0 : fsIncrement);
+	const fontSizeCss = fsMult !== 1 ? `font-size: ${89 * fsMult}%;` : "";
 
 	// Colors
 	const c = rgb(pen.fcForeColor ?? 0xffffff);
@@ -175,16 +201,15 @@ function setCaptionStyle(cssText) {
 }
 
 function generatePenStyles() {
-	const vRect = video?.getBoundingClientRect();
-	const fs = calculateBaseFontSize(vRect?.width, vRect?.height);
-	let style = `::cue(c) { font-family: ${defaultFont}; font-size: ${fs}px; line-height: normal;${isMWEB ? " font-weight: 500;" : ""}}\n`;
+	const fs = currentPens[0]?.szPenSize ? currentPens[0].szPenSize * 89 : 89;
+	let style = `::cue(c) { font-family: ${defaultFont}; font-size: ${fs}%; line-height: normal;${isMWEB ? " font-weight: 500;" : ""}}\n`;
 	style += `.ytp-caption-window-container { width : 100%; }\n`;
 
 	for (let i = 0; i < currentPens.length; i++) {
 		const pen = currentPens[i];
 		if (!pen) continue;
 		if (i == 0) {
-			style += `::cue(.d) { ${penToCss(pen)} }\n\n`; // Default pen
+			style += `::cue(.d) { ${penToCss(pen, true)} }\n\n`; // Default pen
 			continue;
 		}
 		style += `::cue(.pen${i}) { ${penToCss(pen)} }\n`;
@@ -202,7 +227,7 @@ function mapPosToCue(pos, pen, style) {
 	const hasAnchor = anchorPoint != null;
 	const verPos = pos.avVerPos ?? (isMWEB ? 93 : 98);
 
-	let ver = isMWEB ? verPos * 0.91 + 2 : verPos * 0.96 + 2;
+	let ver = isMWEB ? verPos * 0.92 + 2 : verPos * 0.96 + 2;
 	let hor = (pos.ahHorPos ?? 50) * 0.96 + 2;
 
 	const fontSizeIncrement = pen?.szPenSize ? pen.szPenSize / 100 - 1 : 0;
@@ -248,7 +273,7 @@ function mapPosToCue(pos, pen, style) {
 	}
 
 	return {
-		line: rd(ver, 2),
+		line: Math.max(rd(ver, 2), 0),
 		position: rd(hor, 2), // defaults to 'auto'
 		align: align, // defaults to 'center'
 		positionAlign: positionAlign, // Defaults to 'auto'
@@ -265,7 +290,7 @@ function addCuesToTrack(track, json, isAutoGen) {
 
 	// Best solution I can think of rn
 	// TODO: Find a better solution
-	isMWEB && (pens[0].szPenSize ??= 200);
+	isAutoGen && isMWEB && (pens[0].szPenSize ??= 200);
 
 	// Store pens globally for resize updates
 	currentPens = pens;
@@ -316,7 +341,8 @@ function addCuesToTrack(track, json, isAutoGen) {
 			const penId = seg.pPenId ?? ev.pPenId ?? 0;
 
 			let p = pens[penId];
-			if (!p.foForeAlpha && !p.boBackAlpha && !p.etEdgeType) return; // Skip invisible pens
+			if (!(p.foForeAlpha || 1) && !(p.boBackAlpha || 1) /*&& !p.etEdgeType*/)
+				return; // Skip invisible pens // TODO: Handle invisible pens with edge effects instead of removing
 
 			parts.push(penId ? `<c.pen${penId}>` : `<c.d>`);
 			parts.push(seg.utf8);
@@ -437,7 +463,7 @@ const po = new PerformanceObserver((list) => {
 				`Injected CC${translated ? " (TS)" : ""}`,
 				userLang,
 			);
-			track.mode = "hidden";
+			track.mode = "showing"; // debug so not hidden
 			console.log("Injected captions track");
 		} else {
 			if (track.cues) {
