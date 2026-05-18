@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         MWeb Youtube Captions Patch (dev)
 // @author       Sukinyu
-// @version      30
+// @version      31
 // @match        https://m.youtube.com/*
 // @updateURL    https://github.com/Sukinyu/youtube-ios-caption-patch/raw/refs/heads/main/test.user.js
 // @downloadURL  https://github.com/Sukinyu/youtube-ios-caption-patch/raw/refs/heads/main/test.user.js
@@ -514,7 +514,7 @@ function setCaptionStyle(cssText) {
 }
 
 function generatePenStyles() {
-	let style = `::cue(c) { font-family: ${defaultFont}; line-height: normal;${isMWEB ? " font-weight: 500;" : ""}}\n`;
+	let style = `::cue(c) { font-family: ${defaultFont}; font-size: 89%; line-height: normal;${isMWEB ? " font-weight: 500;" : ""}}\n`;
 	style += `.ytp-caption-window-container { width : 100%; }\n`;
 
 	for (let i = 0; i < currentPens.length; i++) {
@@ -617,6 +617,7 @@ function addCuesToTrack(track, json, isAutoGen) {
 	// ---------- build CSS from pens + positions ----------
 	const style = generatePenStyles();
 	if (style) setCaptionStyle(style);
+	alert(style);
 
 	const windowMap = new Map();
 
