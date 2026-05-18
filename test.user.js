@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         MWeb Youtube Captions Patch (dev)
 // @author       Sukinyu
-// @version      27
+// @version      28
 // @match        https://m.youtube.com/*
 // @updateURL    https://github.com/Sukinyu/youtube-ios-caption-patch/raw/refs/heads/main/test.user.js
 // @downloadURL  https://github.com/Sukinyu/youtube-ios-caption-patch/raw/refs/heads/main/test.user.js
@@ -752,8 +752,7 @@ const po = new PerformanceObserver((list) => {
 				`Injected CC${translated ? " (TS)" : ""}`,
 				userLang,
 			);
-			track.mode = "hidden";
-			track.default = true;
+			track.mode = "showing"; // debug so not hidden
 			console.log("Injected captions track");
 		} else {
 			if (track.cues) {
@@ -799,12 +798,14 @@ if (video?.src) {
 	}).observe(video, { attributeFilter: ["src"] });
 }
 
+/*
 video?.addEventListener("webkitbeginfullscreen", () => {
 	video?.textTracks[0] && (video.textTracks[0].mode = "showing");
 });
 video?.addEventListener("webkitendfullscreen", () => {
 	video?.textTracks[0] && (video.textTracks[0].mode = "hidden");
 });
+*/
 
 function createCaptionEditorButton(openEditor) {
 	const existing = document.getElementById("caption-editor-btn");
