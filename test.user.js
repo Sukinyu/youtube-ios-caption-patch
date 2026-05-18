@@ -514,7 +514,7 @@ function setCaptionStyle(cssText) {
 }
 
 function generatePenStyles() {
-	let style = `::cue(c) { font-family: ${defaultFont}; font-size: 89%; line-height: normal;${isMWEB ? " font-weight: 500;" : ""}}\n`;
+	let style = `::cue(c) { font-family: ${defaultFont}; font-size: 16px; line-height: normal;${isMWEB ? " font-weight: 500;" : ""}}\n`;
 	style += `.ytp-caption-window-container { width : 100%; }\n`;
 
 	for (let i = 0; i < currentPens.length; i++) {
