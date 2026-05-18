@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         MWeb Youtube Captions Patch (dev)
 // @author       Sukinyu
-// @version      29
+// @version      30
 // @match        https://m.youtube.com/*
 // @updateURL    https://github.com/Sukinyu/youtube-ios-caption-patch/raw/refs/heads/main/test.user.js
 // @downloadURL  https://github.com/Sukinyu/youtube-ios-caption-patch/raw/refs/heads/main/test.user.js
@@ -329,7 +329,7 @@ function calculateBaseFontSize(videoWidth, videoHeight) {
 		const threshold = videoHeight > videoWidth * 1.3 ? 480 : 640;
 		baseSize = (videoWidth / threshold) * 16;
 	}
-	return rd(baseSize);
+	return 89 //rd(baseSize);
 }
 
 function ts(ms, format = false) {
@@ -388,7 +388,7 @@ const parseJson3 = (json) => {
  */
 function getVideoSize(video) {
 	if (!video) return { width: 0, height: 0 };
-	if (!document.fullscreenElement) {
+	if (!video?.webkitDisplayingFullscreen) {
 		return { width: video.clientWidth, height: video.clientHeight };
 	}
 	const vw = video.videoWidth;
@@ -426,7 +426,7 @@ function penToCss(pen) {
 	const fontSizeIncrement = pen.szPenSize ? pen.szPenSize / 100 - 1 : 0;
 	let fontSizeMultiplier = 1 + 0.25 * fontSizeIncrement;
 	const fontSizeCss =
-		fontSizeMultiplier !== 1 ? `font-size: ${fs * fontSizeMultiplier}px;` : "";
+		fontSizeMultiplier !== 1 ? `font-size: ${fs * fontSizeMultiplier}%;` : "";
 
 	// Colors
 	const c = rgb(pen.fcForeColor ?? 0xffffff);
@@ -516,7 +516,7 @@ function setCaptionStyle(cssText) {
 function generatePenStyles() {
 	const vRect = getVideoSize(video);
 	const fs = calculateBaseFontSize(vRect.width, vRect.height);
-	let style = `::cue(c) { font-family: ${defaultFont}; font-size: ${fs}px; line-height: normal;${isMWEB ? " font-weight: 500;" : ""}}\n`;
+	let style = `::cue(c) { font-family: ${defaultFont}; font-size: ${fs}%; line-height: normal;${isMWEB ? " font-weight: 500;" : ""}}\n`;
 	style += `.ytp-caption-window-container { width : 100%; }\n`;
 
 	for (let i = 0; i < currentPens.length; i++) {
@@ -662,7 +662,8 @@ function addCuesToTrack(track, json, isAutoGen) {
 			const penId = seg.pPenId ?? ev.pPenId ?? 0;
 
 			let p = pens[penId];
-			if (!p.foForeAlpha && !p.boBackAlpha && !p.etEdgeType) return; // Skip invisible pens
+			if (!(p.foForeAlpha || 1) && !(p.boBackAlpha || 1) && !p.etEdgeType)
+				return; // Skip invisible pens
 
 			parts.push(penId ? `<c.pen${penId}>` : `<c.d>`);
 			parts.push(seg.utf8);
