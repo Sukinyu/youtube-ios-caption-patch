@@ -753,6 +753,7 @@ const po = new PerformanceObserver((list) => {
 				userLang,
 			);
 			track.mode = "hidden";
+			track.default = true;
 			console.log("Injected captions track");
 		} else {
 			if (track.cues) {
