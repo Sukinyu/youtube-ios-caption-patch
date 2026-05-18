@@ -799,12 +799,12 @@ if (video?.src) {
 	}).observe(video, { attributeFilter: ["src"] });
 }
 
-video.onwebkitbeginfullscreen = () => {
+video?.addEventListener("webkitbeginfullscreen", () => {
 	video?.textTracks[0] && (video.textTracks[0].mode = "showing");
-};
-video.onwebkitendfullscreen = () => {
+});
+video?.addEventListener("webkitendfullscreen", () => {
 	video?.textTracks[0] && (video.textTracks[0].mode = "hidden");
-};
+});
 
 function createCaptionEditorButton(openEditor) {
 	const existing = document.getElementById("caption-editor-btn");
