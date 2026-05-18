@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         MWeb Youtube Captions Patch (dev)
 // @author       Sukinyu
-// @version      28
+// @version      29
 // @match        https://m.youtube.com/*
 // @updateURL    https://github.com/Sukinyu/youtube-ios-caption-patch/raw/refs/heads/main/test.user.js
 // @downloadURL  https://github.com/Sukinyu/youtube-ios-caption-patch/raw/refs/heads/main/test.user.js
@@ -321,7 +321,6 @@ const defaultFont =
 	'"YouTube Noto", Roboto, Arial, Helvetica, Verdana, "PT Sans Caption", sans-serif';
 let currentPens = [];
 const isMWEB = window.location.host.startsWith("m.");
-const inFullscreen = () => document["webkitIsFullScreen"];
 
 function calculateBaseFontSize(videoWidth, videoHeight) {
 	let baseSize = (videoHeight / 360) * 16;
@@ -382,14 +381,46 @@ const parseJson3 = (json) => {
 	}
 };
 
+/**
+ * @type {function(HTMLVideoElement | null): {width: number, height: number}}
+ * @property {number} width
+ * @property {number} height
+ */
+function getVideoSize(video) {
+	if (!video) return { width: 0, height: 0 };
+	if (!document.fullscreenElement) {
+		return { width: video.clientWidth, height: video.clientHeight };
+	}
+	const vw = video.videoWidth;
+	const vh = video.videoHeight;
+
+	const cw = window.innerWidth;
+	const ch = window.innerHeight;
+
+	const videoAspect = vw / vh;
+	const containerAspect = cw / ch;
+
+	if (videoAspect > containerAspect) {
+		return {
+			width: cw,
+			height: cw / videoAspect,
+		};
+	}
+
+	return {
+		width: ch * videoAspect,
+		height: ch,
+	};
+}
+
 function penToCss(pen) {
 	if (!pen) return "color: rgba(255,255,255,1);";
 
 	// Get video dimensions for font size calculation
-	const videoRect = video?.getBoundingClientRect();
+	const vRect = getVideoSize(video);
 
 	// Calculate base font percent (YouTube's N3e function)
-	let fs = calculateBaseFontSize(videoRect?.width, videoRect?.height);
+	let fs = calculateBaseFontSize(vRect.width, vRect.height);
 
 	// Font size multiplier (YouTube's SzJ function)
 	const fontSizeIncrement = pen.szPenSize ? pen.szPenSize / 100 - 1 : 0;
@@ -483,8 +514,8 @@ function setCaptionStyle(cssText) {
 }
 
 function generatePenStyles() {
-	const vRect = video?.getBoundingClientRect();
-	const fs = calculateBaseFontSize(vRect?.width, vRect?.height);
+	const vRect = getVideoSize(video);
+	const fs = calculateBaseFontSize(vRect.width, vRect.height);
 	let style = `::cue(c) { font-family: ${defaultFont}; font-size: ${fs}px; line-height: normal;${isMWEB ? " font-weight: 500;" : ""}}\n`;
 	style += `.ytp-caption-window-container { width : 100%; }\n`;
 
@@ -798,14 +829,12 @@ if (video?.src) {
 	}).observe(video, { attributeFilter: ["src"] });
 }
 
-/*
 video?.addEventListener("webkitbeginfullscreen", () => {
-	video?.textTracks[0] && (video.textTracks[0].mode = "showing");
+	//video?.textTracks[0] && (video.textTracks[0].mode = "showing");
 });
 video?.addEventListener("webkitendfullscreen", () => {
-	video?.textTracks[0] && (video.textTracks[0].mode = "hidden");
+	//video?.textTracks[0] && (video.textTracks[0].mode = "hidden");
 });
-*/
 
 function createCaptionEditorButton(openEditor) {
 	const existing = document.getElementById("caption-editor-btn");
@@ -828,7 +857,6 @@ function createCaptionEditorButton(openEditor) {
 	btn.style.fontSize = "14px";
 	btn.style.fontFamily = "Arial, sans-serif";
 	btn.style.backdropFilter = "blur(5px)";
-	btn.style.webkitBackdropFilter = "blur(5px)";
 	btn.style.boxShadow = "0 2px 10px rgba(0,0,0,0.35)";
 	btn.style.cursor = "pointer";
 	btn.style.userSelect = "none";
