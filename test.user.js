@@ -516,7 +516,7 @@ function setCaptionStyle(cssText) {
 
 function generatePenStyles() {
 	const fs = currentPens[0]?.szPenSize ? currentPens[0].szPenSize * 89 : 89;
-	let style = `::cue { font-family: ${defaultFont}; font-size: ${fs}%; background: rgba(0, 0, 0, 0.5); line-height: normal !important;${isMWEB ? " font-weight: 500;" : ""} }\n`;
+	let style = `::cue(c) { font-family: ${defaultFont}; font-size: ${fs}%; background: rgba(0, 0, 0, 0.5); line-height: normal !important;${isMWEB ? " font-weight: 500;" : ""} }\n`;
 	style += `.ytp-caption-window-container { width : 100%; }\n\n`;
 
 	for (let i = 1; i < currentPens.length; i++) {
