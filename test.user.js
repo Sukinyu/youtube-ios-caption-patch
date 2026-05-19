@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         MWeb Youtube Captions Patch (dev)
 // @author       Sukinyu
-// @version      33
+// @version      34
 // @match        https://m.youtube.com/*
 // @updateURL    https://github.com/Sukinyu/youtube-ios-caption-patch/raw/refs/heads/main/test.user.js
 // @downloadURL  https://github.com/Sukinyu/youtube-ios-caption-patch/raw/refs/heads/main/test.user.js
@@ -520,10 +520,10 @@ function generatePenStyles() {
 	for (let i = 0; i < currentPens.length; i++) {
 		const pen = currentPens[i];
 		if (!pen) continue;
-		if (i == 0) {
-			style += `::cue(.d) { ${penToCss(pen, true)} }\n\n`; // Default pen
-			continue;
-		}
+		// if (i == 0) {
+		// 	style += `::cue(.d) { ${penToCss(pen, true)} }\n\n`; // Default pen
+		// 	continue;
+		// }
 		style += `::cue(.pen${i}) { ${penToCss(pen)} }\n`;
 	}
 	return style;
@@ -663,7 +663,7 @@ function addCuesToTrack(track, json, isAutoGen) {
 			if (!(p.foForeAlpha || 1) && !(p.boBackAlpha || 1) /*&& !p.etEdgeType*/)
 				return; // Skip invisible pens // TODO: Handle invisible pens with edge effects instead of removing
 
-			parts.push(penId ? `<c.pen${penId}>` : `<c.d>`);
+			parts.push(penId ? `<c.pen${penId}>` : "");
 			parts.push(seg.utf8);
 			parts.push("</c>");
 		});
