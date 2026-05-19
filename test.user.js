@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         MWeb Youtube Captions Patch (dev)
 // @author       Sukinyu
-// @version      34
+// @version      35
 // @match        https://m.youtube.com/*
 // @updateURL    https://github.com/Sukinyu/youtube-ios-caption-patch/raw/refs/heads/main/test.user.js
 // @downloadURL  https://github.com/Sukinyu/youtube-ios-caption-patch/raw/refs/heads/main/test.user.js
@@ -523,6 +523,7 @@ function generatePenStyles() {
 		if (!css) continue;
 		style += `::cue(.pen${i}) { ${css} }\n`;
 	}
+	alert(style);
 	return style;
 }
 
