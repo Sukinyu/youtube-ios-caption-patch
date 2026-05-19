@@ -439,7 +439,7 @@ function penToCss(pen, ignore_fs = false) {
 		:	"";
 
 	const backgroundCss =
-		backAlpha != 0 ? `background: rgba(${cB},${backAlpha});` : "";
+		backAlpha != 0.5 ? `background: rgba(${cB},${backAlpha});` : "";
 
 	// Edge effects
 	const edgeType = pen.etEdgeType ?? 0;
