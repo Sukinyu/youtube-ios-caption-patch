@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         MWeb Youtube Captions Patch (dev)
 // @author       Sukinyu
-// @version      37
+// @version      38
 // @match        https://m.youtube.com/*
 // @updateURL    https://github.com/Sukinyu/youtube-ios-caption-patch/raw/refs/heads/main/test.user.js
 // @downloadURL  https://github.com/Sukinyu/youtube-ios-caption-patch/raw/refs/heads/main/test.user.js
@@ -439,9 +439,7 @@ function penToCss(pen, ignore_fs = false) {
 		:	"";
 
 	const backgroundCss =
-		cB != "0,0,0" || backAlpha != 0.5 ?
-			`background: rgba(${cB},${backAlpha});`
-		:	"";
+		backAlpha != 0 ? `background: rgba(${cB},${backAlpha});` : "";
 
 	// Edge effects
 	const edgeType = pen.etEdgeType ?? 0;
@@ -516,14 +514,17 @@ function setCaptionStyle(cssText) {
 
 function generatePenStyles() {
 	const fs = currentPens[0]?.szPenSize ? currentPens[0].szPenSize * 89 : 89;
-	let style = `::cue { font-family: ${defaultFont}; font-size: ${fs}%; background: rgba(0, 0, 0, 0.5) !important; line-height: normal !important;${isMWEB ? " font-weight: 500;" : ""} }\n`;
-	style += `.ytp-caption-window-container { width : 100%; }\n\n`;
+	let style = `::cue(c) { font-family: ${defaultFont}; font-size: ${fs}%; line-height: normal !important;${isMWEB ? " font-weight: 500;" : ""} background: rgba(0, 0, 0, 0.5); }\n`;
+	style += `.ytp-caption-window-container { width : 100%; }\n`;
 
-	for (let i = 1; i < currentPens.length; i++) {
+	for (let i = 0; i < currentPens.length; i++) {
 		const pen = currentPens[i];
-		const css = penToCss(pen);
-		if (!css) continue;
-		style += `::cue(.pen${i}) { ${css} }\n`;
+		if (!pen) continue;
+		if (i == 0) {
+			style += `::cue(.d) { ${penToCss(pen, true)} }\n\n`; // Default pen
+			continue;
+		}
+		style += `::cue(.pen${i}) { ${penToCss(pen)} }\n`;
 	}
 	return style;
 }
@@ -662,7 +663,7 @@ function addCuesToTrack(track, json, isAutoGen) {
 			if (!(p.foForeAlpha || 1) && !(p.boBackAlpha || 1) /*&& !p.etEdgeType*/)
 				return; // Skip invisible pens // TODO: Handle invisible pens with edge effects instead of removing
 
-			parts.push(penId ? `<c.pen${penId}>` : "");
+			parts.push(penId ? `<c.pen${penId}>` : "<c.d>"); // Apply pen style or default class
 			parts.push(seg.utf8);
 			parts.push("</c>");
 		});
