@@ -514,17 +514,14 @@ function setCaptionStyle(cssText) {
 
 function generatePenStyles() {
 	const fs = currentPens[0]?.szPenSize ? currentPens[0].szPenSize * 89 : 89;
-	let style = `::cue(c) { font-family: ${defaultFont}; font-size: ${fs}%; line-height: normal;${isMWEB ? " font-weight: 500;" : ""}}\n`;
+	let style = `::cue { font-family: ${defaultFont}; font-size: ${fs}%; line-height: normal;${isMWEB ? " font-weight: 500;" : ""} ${penToCss(currentPens[0])}}\n`;
 	style += `.ytp-caption-window-container { width : 100%; }\n`;
 
-	for (let i = 0; i < currentPens.length; i++) {
+	for (let i = 1; i < currentPens.length; i++) {
 		const pen = currentPens[i];
-		if (!pen) continue;
-		// if (i == 0) {
-		// 	style += `::cue(.d) { ${penToCss(pen, true)} }\n\n`; // Default pen
-		// 	continue;
-		// }
-		style += `::cue(.pen${i}) { ${penToCss(pen)} }\n`;
+		const css = penToCss(pen);
+		if (!css) continue;
+		style += `::cue(.pen${i}) { ${css} }\n`;
 	}
 	return style;
 }
