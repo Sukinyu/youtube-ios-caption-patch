@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         MWeb Youtube Captions Patch (beta)
 // @author       Sukinyu
-// @version      1.0.25
-// @last         5/18/2026 (mm/dd/yyyy)
+// @version      1.1.0
+// @last         5/20/2026 (mm/dd/yyyy)
 // @description  Fix captions on youtube videos in webkit fullscreen mode on iOS (https://m.youtube.com/).
 // @match        https://m.youtube.com/*
 // @updateURL    https://github.com/Sukinyu/youtube-ios-caption-patch/raw/refs/heads/main/beta.user.js
@@ -13,7 +13,6 @@ const injectedUrls = new Set();
 const video = document.querySelector("video");
 const defaultFont =
 	'"YouTube Noto", Roboto, Arial, Helvetica, Verdana, "PT Sans Caption", sans-serif';
-let currentPens = [];
 const isMWEB = window.location.host.startsWith("m.");
 
 function calculateBaseFontSize(videoWidth, videoHeight) {
@@ -108,7 +107,7 @@ function penToCss(pen, ignore_fs = false) {
 	const vRect = getVideoSize(video);
 
 	// Calculate base font percent (YouTube's N3e function)
-	let fs = calculateBaseFontSize(vRect.width, vRect.height);
+	const fs = calculateBaseFontSize(vRect.width, vRect.height);
 
 	// Font size multiplier (YouTube's SzJ function)
 	const fsIncrement = pen.szPenSize ? pen.szPenSize / 100 - 1 : 0;
@@ -127,41 +126,63 @@ function penToCss(pen, ignore_fs = false) {
 		:	"";
 
 	const backgroundCss =
-		backAlpha != 0 ? `background: rgba(${cB},${backAlpha});` : "";
+		cB != "0,0,0" || backAlpha != 0.5 ?
+			`background: rgba(${cB},${backAlpha});`
+		:	"";
 
 	// Edge effects
-	const edgeType = pen.etEdgeType ?? 0;
 	let textShadow = "";
-	if (edgeType) {
+	if (pen.etEdgeType) {
 		textShadow = "text-shadow: ";
+
+		// Convert px -> em relative to 16px base
+		const pxToEm = (px) => `${rd(px / fs, 4)}em`;
+
 		const scale = fs / 16 / 2;
-		const K = rd(Math.max(scale, 1));
-		const v = rd(Math.max(scale * 2, 1));
-		const w = rd(Math.max(scale * 3, 1));
+
+		// Keep the original YouTube math
+		const K = Math.max(scale, 1);
+		const v = Math.max(scale * 2, 1);
+		const w = Math.max(scale * 3, 1);
+
 		let eC = pen.ecEdgeColor != null ? `rgb(${rgb(pen.ecEdgeColor)})` : null;
 		let darkShadow = eC ?? `rgba(34, 34, 34, ${foreAlpha})`;
 		let lightShadow = eC ?? `rgba(204, 204, 204, ${foreAlpha})`;
-		switch (edgeType) {
-			case 1: // Uniform raised
+		switch (pen.etEdgeType) {
+			case 1: {
+				// Uniform raised
+				// Keep stepping in px logic internally
 				const step = window.devicePixelRatio >= 2 ? 0.5 : 1;
 				textShadow += Array.from(
 					{ length: Math.ceil((w - K) / step) },
-					(_, i) => `${K + i * step}px ${K + i * step}px ${darkShadow}`,
+					(_, i) => {
+						const val = K + i * step;
+						return `${pxToEm(val)} ${pxToEm(val)} ${darkShadow}`;
+					},
 				).join(", ");
 				break;
+			}
 			case 2: // 3D raised
-				textShadow += `${K}px ${K}px ${lightShadow}, -${K}px -${K}px ${darkShadow}`;
+				textShadow +=
+					`${pxToEm(K)} ${pxToEm(K)} ${lightShadow}, ` +
+					`-${pxToEm(K)} -${pxToEm(K)} ${darkShadow}`;
 				break;
-			case 3: // Glow (most common)
-				textShadow += Array(5).fill(`0 0 ${v}px ${darkShadow}`).join(", ");
+			case 3: // Glow
+				textShadow += Array(5)
+					.fill(`0 0 ${pxToEm(v)} ${darkShadow}`)
+					.join(", ");
 				break;
-			case 4: // Blur effect
+			case 4: {
+				// Blur/drop shadow
 				const shadows = [];
 				for (let blur = w; blur <= Math.max(5 * scale, 1); blur += scale) {
-					shadows.push(`${v}px ${v}px ${rd(blur, 4)}px ${darkShadow}`);
+					shadows.push(
+						`${pxToEm(v)} ${pxToEm(v)} ${pxToEm(blur)} ${darkShadow}`,
+					);
 				}
 				textShadow += shadows.join(", ");
 				break;
+			}
 		}
 		textShadow += ";";
 	}
@@ -174,7 +195,6 @@ function penToCss(pen, ignore_fs = false) {
 	const fontVariant =
 		Number(pen.fsFontStyle ?? 0) === 7 ? "font-variant: small-caps;" : "";
 	const fontFamilyCss = !fontFamily ? "" : `font-family: ${fontFamily};`;
-
 	const packed = pen.hgHorizGroup ? "text-combine-upright: all;" : "";
 
 	return `
@@ -200,19 +220,18 @@ function setCaptionStyle(cssText) {
 	styleEl.textContent = cssText;
 }
 
-function generatePenStyles() {
-	const fs = currentPens[0]?.szPenSize ? currentPens[0].szPenSize * 89 : 89;
-	let style = `::cue(c) { font-family: ${defaultFont}; font-size: ${fs}%; line-height: normal;${isMWEB ? " font-weight: 500;" : ""}}\n`;
-	style += `.ytp-caption-window-container { width : 100%; }\n`;
+function generatePenStyles(pens) {
+	const fs = pens[0]?.szPenSize ? pens[0].szPenSize * 89 : 89;
+	let style = `::cue(c) {\nfont-family: ${defaultFont};\nfont-size: ${fs}%;\nbackground: rgba(0,0,0,0.5);${isMWEB ? "\nfont-weight: 500;" : ""}\n}\n`;
+	style += `.ytp-caption-window-container { width : 100%; !important}\n`;
+	//style += `::cue(:future) { opacity : 0; }\n`; Disabled due to people preferring the default behavior
 
-	for (let i = 0; i < currentPens.length; i++) {
-		const pen = currentPens[i];
+	for (let i = 1; i < pens.length; i++) {
+		const pen = pens[i];
 		if (!pen) continue;
-		if (i == 0) {
-			style += `::cue(.d) { ${penToCss(pen, true)} }\n\n`; // Default pen
-			continue;
-		}
-		style += `::cue(.pen${i}) { ${penToCss(pen)} }\n`;
+		const css = penToCss(pen);
+		if (!css) continue;
+		style += `::cue(.pen${i}) { ${css} }\n`;
 	}
 	return style;
 }
@@ -292,13 +311,8 @@ function addCuesToTrack(track, json, isAutoGen) {
 	// TODO: Find a better solution
 	isAutoGen && isMWEB && (pens[0].szPenSize ??= 200);
 
-	// Store pens globally for resize updates
-	currentPens = pens;
-	updateCaptionStyles();
-
 	// ---------- build CSS from pens + positions ----------
-	const style = generatePenStyles();
-	if (style) setCaptionStyle(style);
+	setCaptionStyle(generatePenStyles(pens));
 
 	const windowMap = new Map();
 
@@ -324,9 +338,9 @@ function addCuesToTrack(track, json, isAutoGen) {
 		if (ev.wWinId != null) {
 			const winData = windowMap.get(ev.wWinId);
 			if (winData && winData.start <= start && winData.end >= end) {
-			ev.wpWinPosId ??= winData.posId;
-			ev.pPenId ??= winData.penId;
-			ev.wsWinStyleId ??= winData.styleId;
+				ev.wpWinPosId ??= winData.posId;
+				ev.pPenId ??= winData.penId;
+				ev.wsWinStyleId ??= winData.styleId;
 			}
 		}
 
@@ -344,7 +358,7 @@ function addCuesToTrack(track, json, isAutoGen) {
 			if (!(p.foForeAlpha || 1) && !(p.boBackAlpha || 1) /*&& !p.etEdgeType*/)
 				return; // Skip invisible pens // TODO: Handle invisible pens with edge effects instead of removing
 
-			parts.push(penId ? `<c.pen${penId}>` : `<c.d>`);
+			parts.push(penId ? `<c.pen${penId}>` : "<c>"); // Apply pen style or default class
 			parts.push(seg.utf8);
 			parts.push("</c>");
 		});
@@ -463,7 +477,7 @@ const po = new PerformanceObserver((list) => {
 				`Injected CC${translated ? " (TS)" : ""}`,
 				userLang,
 			);
-			track.mode = "showing"; // debug so not hidden
+			track.mode = "hidden"; // debug so not hidden
 			console.log("Injected captions track");
 		} else {
 			if (track.cues) {
@@ -490,14 +504,6 @@ const po = new PerformanceObserver((list) => {
 
 po.observe({ type: "resource", buffered: true });
 
-function updateCaptionStyles() {
-	// Regenerate pen styles on resize to reflect new video dimensions
-	const style = generatePenStyles();
-	if (style) setCaptionStyle(style);
-}
-
-window.onresize = () => updateCaptionStyles();
-
 if (video?.src) {
 	new MutationObserver(() => {
 		const track = video?.textTracks[0];
@@ -508,3 +514,10 @@ if (video?.src) {
 		} // Refresh
 	}).observe(video, { attributeFilter: ["src"] });
 }
+
+video?.addEventListener("webkitbeginfullscreen", () => {
+	video?.textTracks[0] && (video.textTracks[0].mode = "showing");
+});
+video?.addEventListener("webkitendfullscreen", () => {
+	video?.textTracks[0] && (video.textTracks[0].mode = "hidden");
+});

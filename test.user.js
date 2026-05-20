@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         MWeb Youtube Captions Patch (dev)
 // @author       Sukinyu
-// @version      44
+// @version      45
 // @match        https://m.youtube.com/*
 // @updateURL    https://github.com/Sukinyu/youtube-ios-caption-patch/raw/refs/heads/main/test.user.js
 // @downloadURL  https://github.com/Sukinyu/youtube-ios-caption-patch/raw/refs/heads/main/test.user.js
@@ -438,7 +438,7 @@ function penToCss(pen, ignore_fs = false) {
 		:	"";
 
 	const backgroundCss =
-		backAlpha != 0.5 || cB != "0,0,0" ?
+		cB != "0,0,0" || backAlpha != 0.5 ?
 			`background: rgba(${cB},${backAlpha});`
 		:	"";
 
@@ -479,13 +479,11 @@ function penToCss(pen, ignore_fs = false) {
 					`${pxToEm(K)} ${pxToEm(K)} ${lightShadow}, ` +
 					`-${pxToEm(K)} -${pxToEm(K)} ${darkShadow}`;
 				break;
-
 			case 3: // Glow
 				textShadow += Array(5)
 					.fill(`0 0 ${pxToEm(v)} ${darkShadow}`)
 					.join(", ");
 				break;
-
 			case 4: {
 				// Blur/drop shadow
 				const shadows = [];
@@ -498,7 +496,6 @@ function penToCss(pen, ignore_fs = false) {
 				break;
 			}
 		}
-
 		textShadow += ";";
 	}
 
@@ -510,7 +507,6 @@ function penToCss(pen, ignore_fs = false) {
 	const fontVariant =
 		Number(pen.fsFontStyle ?? 0) === 7 ? "font-variant: small-caps;" : "";
 	const fontFamilyCss = !fontFamily ? "" : `font-family: ${fontFamily};`;
-
 	const packed = pen.hgHorizGroup ? "text-combine-upright: all;" : "";
 
 	return `
@@ -540,12 +536,14 @@ function generatePenStyles(pens) {
 	const fs = pens[0]?.szPenSize ? pens[0].szPenSize * 89 : 89;
 	let style = `::cue(c) {\nfont-family: ${defaultFont};\nfont-size: ${fs}%;\nbackground: rgba(0,0,0,0.5);${isMWEB ? "\nfont-weight: 500;" : ""}\n}\n`;
 	style += `.ytp-caption-window-container { width : 100%; !important}\n`;
-	//style += `::cue(:future) { opacity : 0; }\n`; Disable due to people prefering next text being visible
+	//style += `::cue(:future) { opacity : 0; }\n`; Disabled due to people preferring the default behavior
 
 	for (let i = 1; i < pens.length; i++) {
 		const pen = pens[i];
 		if (!pen) continue;
-		style += `::cue(.pen${i}) { ${penToCss(pen)} }\n`;
+		const css = penToCss(pen);
+		if (!css) continue;
+		style += `::cue(.pen${i}) { ${css} }\n`;
 	}
 	return style;
 }
@@ -836,12 +834,14 @@ if (video?.src) {
 	}).observe(video, { attributeFilter: ["src"] });
 }
 
+/*
 video?.addEventListener("webkitbeginfullscreen", () => {
 	//video?.textTracks[0] && (video.textTracks[0].mode = "showing");
 });
 video?.addEventListener("webkitendfullscreen", () => {
 	//video?.textTracks[0] && (video.textTracks[0].mode = "hidden");
 });
+*/
 
 function createCaptionEditorButton(openEditor) {
 	const existing = document.getElementById("caption-editor-btn");
