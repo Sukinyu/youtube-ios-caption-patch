@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         MWeb Youtube Captions Patch (dev)
 // @author       Sukinyu
-// @version      42
+// @version      44
 // @match        https://m.youtube.com/*
 // @updateURL    https://github.com/Sukinyu/youtube-ios-caption-patch/raw/refs/heads/main/test.user.js
 // @downloadURL  https://github.com/Sukinyu/youtube-ios-caption-patch/raw/refs/heads/main/test.user.js
@@ -538,9 +538,9 @@ function setCaptionStyle(cssText) {
 
 function generatePenStyles(pens) {
 	const fs = pens[0]?.szPenSize ? pens[0].szPenSize * 89 : 89;
-	let style = `::cue(c) { font-family: ${defaultFont}; font-size: ${fs}%; line-height: normal !important; background: rgba(0,0,0,0.5);${isMWEB ? " font-weight: 500;" : ""} }\n`;
+	let style = `::cue(c) {\nfont-family: ${defaultFont};\nfont-size: ${fs}%;\nbackground: rgba(0,0,0,0.5);${isMWEB ? "\nfont-weight: 500;" : ""}\n}\n`;
 	style += `.ytp-caption-window-container { width : 100%; !important}\n`;
-	style += `::cue(:future) { opacity : 0; }\n`;
+	//style += `::cue(:future) { opacity : 0; }\n`; Disable due to people prefering next text being visible
 
 	for (let i = 1; i < pens.length; i++) {
 		const pen = pens[i];
