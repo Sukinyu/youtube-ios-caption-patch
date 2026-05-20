@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         MWeb Youtube Captions Patch (dev)
 // @author       Sukinyu
-// @version      41
+// @version      42
 // @match        https://m.youtube.com/*
 // @updateURL    https://github.com/Sukinyu/youtube-ios-caption-patch/raw/refs/heads/main/test.user.js
 // @downloadURL  https://github.com/Sukinyu/youtube-ios-caption-patch/raw/refs/heads/main/test.user.js
@@ -319,7 +319,6 @@ const injectedUrls = new Set();
 const video = document.querySelector("video");
 const defaultFont =
 	'"YouTube Noto", Roboto, Arial, Helvetica, Verdana, "PT Sans Caption", sans-serif';
-let currentPens = [];
 const isMWEB = window.location.host.startsWith("m.");
 
 function calculateBaseFontSize(videoWidth, videoHeight) {
@@ -439,7 +438,9 @@ function penToCss(pen, ignore_fs = false) {
 		:	"";
 
 	const backgroundCss =
-		backAlpha != 0.5 || cB != "0,0,0" ? `background: rgba(${cB},${backAlpha});` : "";
+		backAlpha != 0.5 || cB != "0,0,0" ?
+			`background: rgba(${cB},${backAlpha});`
+		:	"";
 
 	// Edge effects
 	let textShadow = "";
@@ -535,18 +536,15 @@ function setCaptionStyle(cssText) {
 	styleEl.textContent = cssText;
 }
 
-function generatePenStyles() {
-	const fs = currentPens[0]?.szPenSize ? currentPens[0].szPenSize * 89 : 89;
+function generatePenStyles(pens) {
+	const fs = pens[0]?.szPenSize ? pens[0].szPenSize * 89 : 89;
 	let style = `::cue(c) { font-family: ${defaultFont}; font-size: ${fs}%; line-height: normal !important; background: rgba(0,0,0,0.5);${isMWEB ? " font-weight: 500;" : ""} }\n`;
-	style += `.ytp-caption-window-container { width : 100%; }\n`;
+	style += `.ytp-caption-window-container { width : 100%; !important}\n`;
+	style += `::cue(:future) { opacity : 0; }\n`;
 
-	for (let i = 0; i < currentPens.length; i++) {
-		const pen = currentPens[i];
+	for (let i = 1; i < pens.length; i++) {
+		const pen = pens[i];
 		if (!pen) continue;
-		if (i == 0) {
-		//	style += `::cue(.d) { ${penToCss(pen, true)} }\n\n`; // Default pen
-			continue;
-		}
 		style += `::cue(.pen${i}) { ${penToCss(pen)} }\n`;
 	}
 	return style;
@@ -633,13 +631,8 @@ function addCuesToTrack(track, json, isAutoGen) {
 	// TODO: Find a better solution
 	isAutoGen && isMWEB && (pens[0].szPenSize ??= 200);
 
-	// Store pens globally for resize updates
-	currentPens = pens;
-	updateCaptionStyles();
-
 	// ---------- build CSS from pens + positions ----------
-	const style = generatePenStyles();
-	if (style) setCaptionStyle(style);
+	setCaptionStyle(generatePenStyles(pens));
 
 	const windowMap = new Map();
 
@@ -831,31 +824,6 @@ const po = new PerformanceObserver((list) => {
 });
 
 po.observe({ type: "resource", buffered: true });
-
-function updateCaptionStyles() {
-	// Regenerate pen styles on resize to reflect new video dimensions
-	const style = generatePenStyles();
-	if (style) setCaptionStyle(style);
-}
-
-/*
-let lastW = 0;
-let lastH = 0;
-
-const resizeObserver = new ResizeObserver(() => {
-	const { width, height } = getVideoSize(video);
-
-	// Ignore duplicate resize events
-	if (width === lastW && height === lastH) return;
-
-	lastW = width;
-	lastH = height;
-
-	updateCaptionStyles();
-});
-
-video && resizeObserver.observe(video);
-*/
 
 if (video?.src) {
 	new MutationObserver(() => {
