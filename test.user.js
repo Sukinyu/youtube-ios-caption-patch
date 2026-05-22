@@ -1,65 +1,66 @@
 // ==UserScript==
 // @name         MWeb Youtube Captions Patch (dev)
 // @author       Sukinyu
-// @version      46
+// @version      47
 // @match        https://m.youtube.com/*
 // @updateURL    https://github.com/Sukinyu/youtube-ios-caption-patch/raw/refs/heads/main/test.user.js
 // @downloadURL  https://github.com/Sukinyu/youtube-ios-caption-patch/raw/refs/heads/main/test.user.js
 // ==/UserScript==
 /**
  * @typedef {Object} Json3Seg
- * @property {string} utf8
- * @property {number} [tOffsetMs]
- * @property {number} [pPenId]
+ * @prop {string} utf8
+ * @prop {number} [tOffsetMs]
+ * @prop {number} [pPenId]
  */
 /**
  * @typedef {Object} Json3Event
- * @property {number} tStartMs
- * @property {number} dDurationMs
- * @property {Json3Seg[]} segs
- * @property {number} [wpWinPosId]
- * @property {number} [wsWinStyleId]
- * @property {number} [pPenId]
- * @property {number} [id]
- * @property {number} [wWinId]
- * @property {number} [aAppend]
+ * @prop {number} tStartMs
+ * @prop {number} dDurationMs
+ * @prop {Json3Seg[]} segs
+ * @prop {number} [wpWinPosId]
+ * @prop {number} [wsWinStyleId]
+ * @prop {number} [pPenId]
+ * @prop {number} [id]
+ * @prop {number} [wWinId]
+ * @prop {0 | 1} [aAppend]
  */
 /**
  * @typedef {Object} Json3Pen
- * @property {number} [fcForeColor]
- * @property {number} [foForeAlpha]
- * @property {number} [bcBackColor]
- * @property {number} [boBackAlpha]
- * @property {number} [etEdgeType]
- * @property {number} [ecEdgeColor]
- * @property {number} [szPenSize]
- * @property {number} [fsFontStyle]
- * @property {number} [bAttr]
- * @property {number} [iAttr]
- * @property {number} [uAttr]
- * @property {number} [hgHorizGroup]
+ * @prop {0 | 1 | 2} [ofOffset]
+ * @prop {number} [fcForeColor]
+ * @prop {number} [foForeAlpha]
+ * @prop {number} [bcBackColor]
+ * @prop {number} [boBackAlpha]
+ * @prop {number} [etEdgeType]
+ * @prop {number} [ecEdgeColor]
+ * @prop {number} [szPenSize]
+ * @prop {number} [fsFontStyle]
+ * @prop {0 | 1} [bAttr]
+ * @prop {0 | 1} [iAttr]
+ * @prop {0 | 1} [uAttr]
+ * @prop {number} [hgHorizGroup]
  */
 /**
  * @typedef {Object} Json3WinPos
- * @property {number} apPoint
- * @property {number} [ahHorPos]
- * @property {number} [avVerPos]
- * @property {number} [ccCols]
- * @property {number} [rcRows]
+ * @prop {0|1|2|3|4|5|6|7|8} apPoint
+ * @prop {number} [ahHorPos]
+ * @prop {number} [avVerPos]
+ * @prop {number} [ccCols]
+ * @prop {number} [rcRows]
  */
 /**
  * @typedef {Object} Json3WinStyle
- * @property {number} [mhModeHint]
- * @property {number} [juJustifCode]
- * @property {number} [pdPrintDir]
- * @property {number} [sdScrollDir]
+ * @prop {number} [mhModeHint]
+ * @prop {0 | 1 | 2} [juJustifCode]
+ * @prop {number} [pdPrintDir]
+ * @prop {number} [sdScrollDir]
  */
 /**
  * @typedef {Object} Json3
- * @property {Json3Event[]} events
- * @property {Json3Pen[]} [pens]
- * @property {Json3WinPos[]} wpWinPositions
- * @property {Json3WinStyle[]} wsWinStyles
+ * @prop {Json3Event[]} events
+ * @prop {Json3Pen[]} [pens]
+ * @prop {Json3WinPos[]} wpWinPositions
+ * @prop {Json3WinStyle[]} wsWinStyles
  */
 
 // Start of debug code
@@ -380,11 +381,7 @@ const parseJson3 = (json) => {
 	}
 };
 
-/**
- * @type {function(HTMLVideoElement | null): {width: number, height: number}}
- * @property {number} width
- * @property {number} height
- */
+/** @type {function(HTMLVideoElement | null): {width: number, height: number}} */
 function getVideoSize(video) {
 	if (!video) return { width: 0, height: 0 };
 	if (!video?.webkitDisplayingFullscreen) {
@@ -412,10 +409,9 @@ function getVideoSize(video) {
 	};
 }
 
-/** @param {number} penId @param {Json3Pen[]} pens @param {number} fs */
-function penToCss(penId, pens, fs) {
-	const pen = pens[penId];
-	if (!pen) return "color: #ffffff;";
+/** @type {function(Json3Pen, number): string} */
+function penToCss(pen, fs) {
+	if (!pen) return "";
 
 	// Font size multiplier (YouTube's SzJ function)
 	const fsIncrement = pen.szPenSize ? pen.szPenSize / 100 - 1 : 0;
@@ -496,14 +492,22 @@ function penToCss(penId, pens, fs) {
 	const i = pen.iAttr == 1 ? "font-style: italic;" : "";
 	const u = pen.uAttr == 1 ? "text-decoration: underline;" : "";
 	const fontFamily = penFontFamily(pen);
-	const fontVariant =
-		Number(pen.fsFontStyle ?? 0) === 7 ? "font-variant: small-caps;" : "";
+	const fontVariant = [];
 	const fontFamilyCss = !fontFamily ? "" : `font-family: ${fontFamily};`;
+
+	if (pen.fsFontStyle == 7 || (pen.ofOffset ?? 1) != 1) {
+		fontVariant.push("font-variant:");
+		if (pen.fsFontStyle == 7) fontVariant.push(" small-caps");
+		if (pen.ofOffset == 0) fontVariant.push(" sub");
+		if (pen.ofOffset == 2) fontVariant.push(" super");
+		fontVariant.push(";");
+	}
 
 	const packed = pen.hgHorizGroup ? "text-combine-upright: all;" : "";
 
 	return `
-				${i} ${fontVariant} ${b} ${u}
+				${i} ${b} ${u}
+				${fontVariant.join()}
 				${colorCss}
 				${backgroundCss}
 				${fontFamilyCss}
@@ -525,9 +529,10 @@ function setCaptionStyle(cssText) {
 	styleEl.textContent = cssText;
 }
 
+/** @type {function(Json3Pen[]): string} */
 function generatePenStyles(pens) {
 	const fs = pens[0]?.szPenSize ? pens[0].szPenSize * 89 : 89;
-	let style = `::cue(c) {\nfont-family: ${defaultFont};\nfont-size: ${fs}%;\nbackground: rgba(0,0,0,0.5);${isMWEB ? "\nfont-weight: 500;" : ""}\n}\n`;
+	let style = `::cue(*) {\nfont-family: ${defaultFont};\nfont-size: ${fs}%;\nbackground: rgba(0,0,0,0.5);${isMWEB ? "\nfont-weight: 500;" : ""}\n}\n`;
 	style += `.ytp-caption-window-container { width : 100%; !important}\n`;
 	//style += `::cue(:future) { opacity : 0; }\n`; Disabled due to people preferring the default behavior
 
@@ -535,7 +540,7 @@ function generatePenStyles(pens) {
 	const fontSize = calculateBaseFontSize(vRect.width, vRect.height);
 	for (let id = 1; id < pens.length; id++) {
 		if (!pens[id]) continue;
-		const css = penToCss(id, pens, fontSize);
+		const css = penToCss(pens[id], fontSize);
 		if (!css) continue;
 		style += `::cue(.pen${id}) { ${css} }\n`;
 	}
