@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         MWeb Youtube Captions Patch (dev)
 // @author       Sukinyu
-// @version      45
+// @version      46
 // @match        https://m.youtube.com/*
 // @updateURL    https://github.com/Sukinyu/youtube-ios-caption-patch/raw/refs/heads/main/test.user.js
 // @downloadURL  https://github.com/Sukinyu/youtube-ios-caption-patch/raw/refs/heads/main/test.user.js
@@ -447,7 +447,7 @@ function penToCss(penId, pens, fs) {
 
 		// Keep the original YouTube math
 		const K = Math.max(scale, 1);
-		const v = Math.max(scale * 2, 1);
+		//const v = Math.max(scale * 2, 1); No longer used
 		const w = Math.max(scale * 3, 1);
 		const eC = pen.ecEdgeColor != null ? `rgb(${rgb(pen.ecEdgeColor)})` : null;
 		const darkShadow = eC ?? `rgba(34, 34, 34, ${foreAlpha})`;
@@ -460,10 +460,10 @@ function penToCss(penId, pens, fs) {
 				// Keep stepping in px logic internally
 				const step = window.devicePixelRatio >= 2 ? 0.5 : 1;
 				for (let i = 0; i < Math.ceil((w - K) / step); i++) {
-					const val = K + i * step;
+					const ofs = i * step;
 					// shadows.push(`${toEm(val)} ${toEm(val)} ${darkShadow}`);
 					shadows.push(
-						`max(${toEm(val)},${1 + i * step}px) max(${toEm(val)},${1 + i * step}px) ${darkShadow}`,
+						`max(calc(0.03125em + ${ofs}px),${1 + ofs}px) max(calc(0.03125em + ${ofs}px),${1 + ofs}px) ${darkShadow}`,
 					);
 				}
 				break;
@@ -480,7 +480,9 @@ function penToCss(penId, pens, fs) {
 			case 4: {
 				// Blur/drop shadow
 				for (let blur = w; blur <= Math.max(5 * scale, 1); blur += scale) {
-					shadows.push(`max(0.09375em,1px) max(0.09375em,1px) ${toEm(blur)} ${darkShadow}`);
+					shadows.push(
+						`max(0.09375em,1px) max(0.09375em,1px) ${toEm(blur)} ${darkShadow}`,
+					);
 				}
 				break;
 			}
@@ -844,10 +846,10 @@ if (video?.src) {
 
 /*
 video?.addEventListener("webkitbeginfullscreen", () => {
-	//video?.textTracks[0] && (video.textTracks[0].mode = "showing");
+	video?.textTracks[0] && (video.textTracks[0].mode = "showing");
 });
 video?.addEventListener("webkitendfullscreen", () => {
-	//video?.textTracks[0] && (video.textTracks[0].mode = "hidden");
+	video?.textTracks[0] && (video.textTracks[0].mode = "hidden");
 });
 */
 
