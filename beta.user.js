@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         MWeb Youtube Captions Patch (beta)
 // @author       Sukinyu
-// @version      1.1.1
+// @version      1.1.2
 // @last         5/20/2026 (mm/dd/yyyy)
 // @description  Fix captions on youtube videos in webkit fullscreen mode on iOS (https://m.youtube.com/).
 // @match        https://m.youtube.com/*
@@ -149,28 +149,26 @@ function penToCss(pen, fs) {
 					{ length: Math.ceil((w - K) / step) },
 					(_, i) => {
 						const val = K + i * step;
-						return `${pxToEm(val)} ${pxToEm(val)} ${darkShadow}`;
+						return `${toEm(val)} ${toEm(val)} ${darkShadow}`;
 					},
 				).join(", ");
 				break;
 			}
 			case 2: // 3D raised
 				textShadow +=
-					`${pxToEm(K)} ${pxToEm(K)} ${lightShadow}, ` +
-					`-${pxToEm(K)} -${pxToEm(K)} ${darkShadow}`;
+					`${toEm(K)} ${toEm(K)} ${lightShadow}, ` +
+					`-${toEm(K)} -${toEm(K)} ${darkShadow}`;
 				break;
 			case 3: // Glow
 				textShadow += Array(5)
-					.fill(`0 0 ${pxToEm(v)} ${darkShadow}`)
+					.fill(`0 0 ${toEm(v)} ${darkShadow}`)
 					.join(", ");
 				break;
 			case 4: {
 				// Blur/drop shadow
 				const shadows = [];
 				for (let blur = w; blur <= Math.max(5 * scale, 1); blur += scale) {
-					shadows.push(
-						`${pxToEm(v)} ${pxToEm(v)} ${pxToEm(blur)} ${darkShadow}`,
-					);
+					shadows.push(`${toEm(v)} ${toEm(v)} ${toEm(blur)} ${darkShadow}`);
 				}
 				textShadow += shadows.join(", ");
 				break;
@@ -213,17 +211,18 @@ function setCaptionStyle(cssText) {
 }
 
 function generatePenStyles(pens) {
-	const fs = 89 * (0.75 + (pen?.szPenSize ?? 100) / 400);
+	const fs = 89 * (0.75 + (pens[0].szPenSize ?? 100) / 400);
 	let style = `::cue(c) {\nfont-family: ${defaultFont};\nfont-size: ${fs}%;\nbackground: rgba(0,0,0,0.5);${isMWEB ? "\nfont-weight: 500;" : ""}\n}\n`;
 	style += `.ytp-caption-window-container { width : 100%; !important}\n`;
 	//style += `::cue(:future) { opacity : 0; }\n`; Disabled due to people preferring the default behavior
 
-	for (let i = 1; i < pens.length; i++) {
-		const pen = pens[i];
-		if (!pen) continue;
-		const css = penToCss(pen);
+	const vRect = getVideoSize(video);
+	const fontSize = calculateBaseFontSize(vRect.width, vRect.height);
+	for (let id = 1; id < pens.length; id++) {
+		if (!pens[id]) continue;
+		const css = penToCss(pens[id], fontSize);
 		if (!css) continue;
-		style += `::cue(.pen${i}) { ${css} }\n`;
+		style += `::cue(.pen${id}) { ${css} }\n`;
 	}
 	return style;
 }

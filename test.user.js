@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         MWeb Youtube Captions Patch (dev)
 // @author       Sukinyu
-// @version      48
+// @version      49
 // @match        https://m.youtube.com/*
 // @updateURL    https://github.com/Sukinyu/youtube-ios-caption-patch/raw/refs/heads/main/test.user.js
 // @downloadURL  https://github.com/Sukinyu/youtube-ios-caption-patch/raw/refs/heads/main/test.user.js
@@ -531,7 +531,7 @@ function setCaptionStyle(cssText) {
 
 /** @type {function(Json3Pen[]): string} */
 function generatePenStyles(pens) {
-	const fs = 89 * (0.75 + (pen?.szPenSize ?? 100) / 400);
+	const fs = 89 * (0.75 + (pens[0].szPenSize ?? 100) / 400);
 	let style = `::cue(*) {\nfont-family: ${defaultFont};\nfont-size: ${fs}%;\nbackground: rgba(0,0,0,0.5);${isMWEB ? "\nfont-weight: 500;" : ""}\n}\n`;
 	style += `.ytp-caption-window-container { width : 100%; !important}\n`;
 	//style += `::cue(:future) { opacity : 0; }\n`; Disabled due to people preferring the default behavior
