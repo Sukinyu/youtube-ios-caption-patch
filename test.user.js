@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         MWeb Youtube Captions Patch (dev)
 // @author       Sukinyu
-// @version      47
+// @version      48
 // @match        https://m.youtube.com/*
 // @updateURL    https://github.com/Sukinyu/youtube-ios-caption-patch/raw/refs/heads/main/test.user.js
 // @downloadURL  https://github.com/Sukinyu/youtube-ios-caption-patch/raw/refs/heads/main/test.user.js
@@ -415,7 +415,7 @@ function penToCss(pen, fs) {
 
 	// Font size multiplier (YouTube's SzJ function)
 	const fsIncrement = pen.szPenSize ? pen.szPenSize / 100 - 1 : 0;
-	let fsMult = 1 + 0.25 * fsIncrement;
+	const fsMult = 0.75 + (pen?.szPenSize ?? 100) / 400;
 	const fontSizeCss = fsMult !== 1 ? `font-size: ${89 * fsMult}%;` : "";
 
 	// Colors
@@ -425,14 +425,14 @@ function penToCss(pen, fs) {
 	const backAlpha = rd(pen.boBackAlpha != null ? pen.boBackAlpha / 255 : 0.5);
 
 	const colorCss =
-		c != "255,255,255" || foreAlpha != 1 ?
-			`color: rgba(${c},${foreAlpha});`
-		:	"";
+		c != "255,255,255" || foreAlpha != 1
+			? `color: rgba(${c},${foreAlpha});`
+			: "";
 
 	const backgroundCss =
-		cB != "0,0,0" || backAlpha != 0.5 ?
-			`background: rgba(${cB},${backAlpha});`
-		:	"";
+		cB != "0,0,0" || backAlpha != 0.5
+			? `background: rgba(${cB},${backAlpha});`
+			: "";
 
 	// Edge effects
 	let textShadow = "";
@@ -531,7 +531,7 @@ function setCaptionStyle(cssText) {
 
 /** @type {function(Json3Pen[]): string} */
 function generatePenStyles(pens) {
-	const fs = pens[0]?.szPenSize ? pens[0].szPenSize * 89 : 89;
+	const fs = 89 * (0.75 + (pen?.szPenSize ?? 100) / 400);
 	let style = `::cue(*) {\nfont-family: ${defaultFont};\nfont-size: ${fs}%;\nbackground: rgba(0,0,0,0.5);${isMWEB ? "\nfont-weight: 500;" : ""}\n}\n`;
 	style += `.ytp-caption-window-container { width : 100%; !important}\n`;
 	//style += `::cue(:future) { opacity : 0; }\n`; Disabled due to people preferring the default behavior
@@ -566,18 +566,22 @@ function mapPosToCue(pos, pen, style) {
 		hor = Math.max(hor / (1 + fontSizeIncrement * 2), 2);
 	}
 
-	let align =
-		LEFT_ANCHORS.has(anchorPoint) ? "left"
-		: RIGHT_ANCHORS.has(anchorPoint) ? "right"
-		: "";
-	let positionAlign =
-		LEFT_ANCHORS.has(anchorPoint) ? "line-left"
-		: RIGHT_ANCHORS.has(anchorPoint) ? "line-right"
-		: "";
+	let align = LEFT_ANCHORS.has(anchorPoint)
+		? "left"
+		: RIGHT_ANCHORS.has(anchorPoint)
+			? "right"
+			: "";
+	let positionAlign = LEFT_ANCHORS.has(anchorPoint)
+		? "line-left"
+		: RIGHT_ANCHORS.has(anchorPoint)
+			? "line-right"
+			: "";
 	let lineAlign =
-		anchorPoint >= 3 && anchorPoint <= 5 ? "center"
-		: anchorPoint >= 6 ? "end"
-		: undefined;
+		anchorPoint >= 3 && anchorPoint <= 5
+			? "center"
+			: anchorPoint >= 6
+				? "end"
+				: undefined;
 	let vertical = "";
 
 	switch (style?.juJustifCode) {

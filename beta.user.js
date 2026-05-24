@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         MWeb Youtube Captions Patch (beta)
 // @author       Sukinyu
-// @version      1.1.0
+// @version      1.1.1
 // @last         5/20/2026 (mm/dd/yyyy)
 // @description  Fix captions on youtube videos in webkit fullscreen mode on iOS (https://m.youtube.com/).
 // @match        https://m.youtube.com/*
@@ -100,18 +100,12 @@ function getVideoSize(video) {
 	};
 }
 
-function penToCss(pen, ignore_fs = false) {
-	if (!pen) return "color: rgba(255,255,255,1);";
-
-	// Get video dimensions for font size calculation
-	const vRect = getVideoSize(video);
-
-	// Calculate base font percent (YouTube's N3e function)
-	const fs = calculateBaseFontSize(vRect.width, vRect.height);
+function penToCss(pen, fs) {
+	if (!pen) return "";
 
 	// Font size multiplier (YouTube's SzJ function)
 	const fsIncrement = pen.szPenSize ? pen.szPenSize / 100 - 1 : 0;
-	let fsMult = 1 + 0.25 * (ignore_fs && fsIncrement === 1 ? 0 : fsIncrement);
+	const fsMult = 0.75 + (pen?.szPenSize ?? 100) / 400;
 	const fontSizeCss = fsMult !== 1 ? `font-size: ${89 * fsMult}%;` : "";
 
 	// Colors
@@ -121,24 +115,22 @@ function penToCss(pen, ignore_fs = false) {
 	const backAlpha = rd(pen.boBackAlpha != null ? pen.boBackAlpha / 255 : 0.5);
 
 	const colorCss =
-		c != "255,255,255" || foreAlpha != 1 ?
-			`color: rgba(${c},${foreAlpha});`
-		:	"";
+		c != "255,255,255" || foreAlpha != 1
+			? `color: rgba(${c},${foreAlpha});`
+			: "";
 
 	const backgroundCss =
-		cB != "0,0,0" || backAlpha != 0.5 ?
-			`background: rgba(${cB},${backAlpha});`
-		:	"";
+		cB != "0,0,0" || backAlpha != 0.5
+			? `background: rgba(${cB},${backAlpha});`
+			: "";
 
 	// Edge effects
 	let textShadow = "";
 	if (pen.etEdgeType) {
 		textShadow = "text-shadow: ";
-
+		const scale = fs / 32;
 		// Convert px -> em relative to 16px base
-		const pxToEm = (px) => `${rd(px / fs, 4)}em`;
-
-		const scale = fs / 16 / 2;
+		const toEm = (px) => `${rd(px / fs)}em`;
 
 		// Keep the original YouTube math
 		const K = Math.max(scale, 1);
@@ -221,7 +213,7 @@ function setCaptionStyle(cssText) {
 }
 
 function generatePenStyles(pens) {
-	const fs = pens[0]?.szPenSize ? pens[0].szPenSize * 89 : 89;
+	const fs = 89 * (0.75 + (pen?.szPenSize ?? 100) / 400);
 	let style = `::cue(c) {\nfont-family: ${defaultFont};\nfont-size: ${fs}%;\nbackground: rgba(0,0,0,0.5);${isMWEB ? "\nfont-weight: 500;" : ""}\n}\n`;
 	style += `.ytp-caption-window-container { width : 100%; !important}\n`;
 	//style += `::cue(:future) { opacity : 0; }\n`; Disabled due to people preferring the default behavior
@@ -254,18 +246,22 @@ function mapPosToCue(pos, pen, style) {
 		hor = Math.max(hor / (1 + fontSizeIncrement * 2), 2);
 	}
 
-	let align =
-		LEFT_ANCHORS.has(anchorPoint) ? "left"
-		: RIGHT_ANCHORS.has(anchorPoint) ? "right"
-		: "";
-	let positionAlign =
-		LEFT_ANCHORS.has(anchorPoint) ? "line-left"
-		: RIGHT_ANCHORS.has(anchorPoint) ? "line-right"
-		: "";
+	let align = LEFT_ANCHORS.has(anchorPoint)
+		? "left"
+		: RIGHT_ANCHORS.has(anchorPoint)
+			? "right"
+			: "";
+	let positionAlign = LEFT_ANCHORS.has(anchorPoint)
+		? "line-left"
+		: RIGHT_ANCHORS.has(anchorPoint)
+			? "line-right"
+			: "";
 	let lineAlign =
-		anchorPoint >= 3 && anchorPoint <= 5 ? "center"
-		: anchorPoint >= 6 ? "end"
-		: undefined;
+		anchorPoint >= 3 && anchorPoint <= 5
+			? "center"
+			: anchorPoint >= 6
+				? "end"
+				: undefined;
 	let vertical = "";
 
 	switch (style?.juJustifCode) {
@@ -344,8 +340,11 @@ function addCuesToTrack(track, json, isAutoGen) {
 			}
 		}
 
+		if (ev.segs?.length === 0) continue;
+		if (ev.segs?.length === 1 && ev.segs[0].utf8 === "\n") continue; // Skip auto-generated empty cues
+
 		ev.segs.forEach((seg) => {
-			if (!seg.utf8.length) return;
+			if (!seg?.utf8.length) return;
 			if (seg.utf8 == "​") return; // 0 width space
 
 			if (seg.tOffsetMs) {
@@ -363,13 +362,8 @@ function addCuesToTrack(track, json, isAutoGen) {
 			parts.push("</c>");
 		});
 
-		if (parts.length === 0) continue; // Skip cues with no text
-		if (parts.length === 3 && parts[1] == "\n") continue; // Skip empty cues from auto-gen
-
 		let cueText = parts.join("");
 		let cue = new VTTCue(start, end, cueText);
-		if (!ev.segs?.length) continue;
-		if (ev.segs[0].utf8 === "\n") continue; // Skip auto-generated empty cues
 
 		cue.snapToLines = false;
 
@@ -390,17 +384,33 @@ function addCuesToTrack(track, json, isAutoGen) {
 	}
 	if (!isAutoGen) return;
 	// ---------- detect overlapping cues, merge left-align lines ----------
+	// Use event-based algorithm instead of nested loops for better performance
 	const cues = [...track.cues];
-	for (let i = 0; i < cues.length; i++) {
-		for (let j = i + 1; j < cues.length; j++) {
-			const c1 = cues[i];
-			const c2 = cues[j];
+	if (cues.length < 2) return;
+
+	// Sort by start time for efficient interval merging
+	const sorted = cues
+		.map((c, i) => ({ cue: c, idx: i }))
+		.sort((a, b) => a.cue.startTime - b.cue.startTime);
+	const toRemove = new Set();
+
+	for (let i = 0; i < sorted.length; i++) {
+		const c1 = sorted[i].cue;
+		if (toRemove.has(c1)) continue;
+
+		// Only check forward from current position
+		for (let j = i + 1; j < sorted.length; j++) {
+			const c2 = sorted[j].cue;
+			if (toRemove.has(c2)) continue;
+
+			// No more overlaps possible if c2 starts after c1 ends
+			if (c2.startTime >= c1.endTime) break;
 
 			const overlapStart = Math.max(c1.startTime, c2.startTime);
 			const overlapEnd = Math.min(c1.endTime, c2.endTime);
 			if (overlapStart >= overlapEnd) continue; // no overlap
 
-			// Combined cue for the overlapping period
+			// Merge for overlapping period
 			const merged = new VTTCue(
 				overlapStart,
 				overlapEnd,
@@ -414,21 +424,23 @@ function addCuesToTrack(track, json, isAutoGen) {
 			merged.lineAlign = c1.lineAlign;
 			track.addCue(merged);
 
-			// Trim c1 — remove if it has no solo time left
+			// Trim cues
 			if (c1.startTime < overlapStart) {
 				c1.endTime = overlapStart;
 			} else {
-				track.removeCue(c1);
+				toRemove.add(c1);
 			}
 
-			// Trim c2 — remove if it has no solo time left
 			if (c2.endTime > overlapEnd) {
 				c2.startTime = overlapEnd;
 			} else {
-				track.removeCue(c2);
+				toRemove.add(c2);
 			}
 		}
 	}
+
+	// Batch remove marked cues
+	toRemove.forEach((cue) => track.removeCue(cue));
 }
 
 const po = new PerformanceObserver((list) => {
