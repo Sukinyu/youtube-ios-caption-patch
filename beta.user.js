@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         MWeb Youtube Captions Patch (beta)
 // @author       Sukinyu
-// @version      1.1.2
+// @version      1.1.3
 // @last         5/20/2026 (mm/dd/yyyy)
 // @description  Fix captions on youtube videos in webkit fullscreen mode on iOS (https://m.youtube.com/).
 // @match        https://m.youtube.com/*
@@ -104,7 +104,6 @@ function penToCss(pen, fs) {
 	if (!pen) return "";
 
 	// Font size multiplier (YouTube's SzJ function)
-	const fsIncrement = pen.szPenSize ? pen.szPenSize / 100 - 1 : 0;
 	const fsMult = 0.75 + (pen?.szPenSize ?? 100) / 400;
 	const fontSizeCss = fsMult !== 1 ? `font-size: ${89 * fsMult}%;` : "";
 
@@ -115,66 +114,66 @@ function penToCss(pen, fs) {
 	const backAlpha = rd(pen.boBackAlpha != null ? pen.boBackAlpha / 255 : 0.5);
 
 	const colorCss =
-		c != "255,255,255" || foreAlpha != 1
-			? `color: rgba(${c},${foreAlpha});`
-			: "";
+		c != "255,255,255" || foreAlpha != 1 ?
+			`color: rgba(${c},${foreAlpha});`
+		:	"";
 
 	const backgroundCss =
-		cB != "0,0,0" || backAlpha != 0.5
-			? `background: rgba(${cB},${backAlpha});`
-			: "";
+		cB != "0,0,0" || backAlpha != 0.5 ?
+			`background: rgba(${cB},${backAlpha});`
+		:	"";
 
 	// Edge effects
 	let textShadow = "";
 	if (pen.etEdgeType) {
-		textShadow = "text-shadow: ";
 		const scale = fs / 32;
 		// Convert px -> em relative to 16px base
 		const toEm = (px) => `${rd(px / fs)}em`;
 
 		// Keep the original YouTube math
 		const K = Math.max(scale, 1);
-		const v = Math.max(scale * 2, 1);
+		//const v = Math.max(scale * 2, 1); No longer used
 		const w = Math.max(scale * 3, 1);
+		const eC = pen.ecEdgeColor != null ? `rgb(${rgb(pen.ecEdgeColor)})` : null;
+		const darkShadow = eC ?? `rgba(34, 34, 34, ${foreAlpha})`;
+		const lightShadow = eC ?? `rgba(204, 204, 204, ${foreAlpha})`;
 
-		let eC = pen.ecEdgeColor != null ? `rgb(${rgb(pen.ecEdgeColor)})` : null;
-		let darkShadow = eC ?? `rgba(34, 34, 34, ${foreAlpha})`;
-		let lightShadow = eC ?? `rgba(204, 204, 204, ${foreAlpha})`;
+		const shadows = [];
 		switch (pen.etEdgeType) {
 			case 1: {
 				// Uniform raised
 				// Keep stepping in px logic internally
 				const step = window.devicePixelRatio >= 2 ? 0.5 : 1;
-				textShadow += Array.from(
-					{ length: Math.ceil((w - K) / step) },
-					(_, i) => {
-						const val = K + i * step;
-						return `${toEm(val)} ${toEm(val)} ${darkShadow}`;
-					},
-				).join(", ");
+				for (let i = 0; i < Math.ceil((w - K) / step); i++) {
+					const ofs = i * step;
+					// shadows.push(`${toEm(val)} ${toEm(val)} ${darkShadow}`);
+					shadows.push(
+						`max(calc(0.03125em + ${ofs}px),${1 + ofs}px) max(calc(0.03125em + ${ofs}px),${1 + ofs}px) ${darkShadow}`,
+					);
+				}
 				break;
 			}
 			case 2: // 3D raised
-				textShadow +=
-					`${toEm(K)} ${toEm(K)} ${lightShadow}, ` +
-					`-${toEm(K)} -${toEm(K)} ${darkShadow}`;
+				shadows.push(`max(0.03125em,1px) max(0.03125em,1px) ${lightShadow}`);
+				shadows.push(`min(-0.03125em,-1px) min(-0.03125em,-1px) ${darkShadow}`);
 				break;
 			case 3: // Glow
-				textShadow += Array(5)
-					.fill(`0 0 ${toEm(v)} ${darkShadow}`)
-					.join(", ");
+				for (let i = 0; i < 5; i++) {
+					shadows.push(`0 0 max(0.0625em,1px) ${darkShadow}`);
+				}
 				break;
 			case 4: {
 				// Blur/drop shadow
-				const shadows = [];
 				for (let blur = w; blur <= Math.max(5 * scale, 1); blur += scale) {
-					shadows.push(`${toEm(v)} ${toEm(v)} ${toEm(blur)} ${darkShadow}`);
+					shadows.push(
+						`max(0.09375em,1px) max(0.09375em,1px) ${toEm(blur)} ${darkShadow}`,
+					);
 				}
-				textShadow += shadows.join(", ");
 				break;
 			}
 		}
-		textShadow += ";";
+		textShadow =
+			shadows.length > 0 ? `text-shadow: ${shadows.join(", ")};` : "";
 	}
 
 	// Text decorations
@@ -182,13 +181,22 @@ function penToCss(pen, fs) {
 	const i = pen.iAttr == 1 ? "font-style: italic;" : "";
 	const u = pen.uAttr == 1 ? "text-decoration: underline;" : "";
 	const fontFamily = penFontFamily(pen);
-	const fontVariant =
-		Number(pen.fsFontStyle ?? 0) === 7 ? "font-variant: small-caps;" : "";
+	const fontVariant = [];
 	const fontFamilyCss = !fontFamily ? "" : `font-family: ${fontFamily};`;
+
+	if (pen.fsFontStyle == 7 || (pen.ofOffset ?? 1) != 1) {
+		fontVariant.push("font-variant:");
+		if (pen.fsFontStyle == 7) fontVariant.push(" small-caps");
+		if (pen.ofOffset == 0) fontVariant.push(" sub");
+		if (pen.ofOffset == 2) fontVariant.push(" super");
+		fontVariant.push(";");
+	}
+
 	const packed = pen.hgHorizGroup ? "text-combine-upright: all;" : "";
 
 	return `
-				${i} ${fontVariant} ${b} ${u}
+				${i} ${b} ${u}
+				${fontVariant.join()}
 				${colorCss}
 				${backgroundCss}
 				${fontFamilyCss}
@@ -245,22 +253,18 @@ function mapPosToCue(pos, pen, style) {
 		hor = Math.max(hor / (1 + fontSizeIncrement * 2), 2);
 	}
 
-	let align = LEFT_ANCHORS.has(anchorPoint)
-		? "left"
-		: RIGHT_ANCHORS.has(anchorPoint)
-			? "right"
-			: "";
-	let positionAlign = LEFT_ANCHORS.has(anchorPoint)
-		? "line-left"
-		: RIGHT_ANCHORS.has(anchorPoint)
-			? "line-right"
-			: "";
+	let align =
+		LEFT_ANCHORS.has(anchorPoint) ? "left"
+		: RIGHT_ANCHORS.has(anchorPoint) ? "right"
+		: "";
+	let positionAlign =
+		LEFT_ANCHORS.has(anchorPoint) ? "line-left"
+		: RIGHT_ANCHORS.has(anchorPoint) ? "line-right"
+		: "";
 	let lineAlign =
-		anchorPoint >= 3 && anchorPoint <= 5
-			? "center"
-			: anchorPoint >= 6
-				? "end"
-				: undefined;
+		anchorPoint >= 3 && anchorPoint <= 5 ? "center"
+		: anchorPoint >= 6 ? "end"
+		: undefined;
 	let vertical = "";
 
 	switch (style?.juJustifCode) {
