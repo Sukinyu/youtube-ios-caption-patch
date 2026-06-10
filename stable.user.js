@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         MWeb Youtube Captions Patch
 // @author       Sukinyu
-// @version      1.1.2.1
+// @version      1.1.2.2
 // @last         6/10/2026 (mm/dd/yyyy)
 // @description  Fix captions on youtube videos in webkit fullscreen mode on iOS (https://m.youtube.com/).
 // @match        https://m.youtube.com/*
@@ -538,14 +538,6 @@ const po = new PerformanceObserver((list) => {
 
 po.observe({ type: "resource", buffered: true });
 
-function updateCaptionStyles() {
-	// Regenerate pen styles on resize to reflect new video dimensions
-	const style = generatePenStyles();
-	if (style) setCaptionStyle(style);
-}
-
-window.onresize = () => updateCaptionStyles();
-
 if (video?.src) {
 	new MutationObserver(() => {
 		const track = video?.textTracks[0];
@@ -556,3 +548,10 @@ if (video?.src) {
 		} // Refresh
 	}).observe(video, { attributeFilter: ["src"] });
 }
+
+video?.addEventListener("webkitbeginfullscreen", () => {
+	video?.textTracks[0] && (video.textTracks[0].mode = "showing");
+});
+video?.addEventListener("webkitendfullscreen", () => {
+	video?.textTracks[0] && (video.textTracks[0].mode = "hidden");
+});
