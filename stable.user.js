@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         MWeb Youtube Captions Patch
 // @author       Sukinyu
-// @version      1.1.2.2
+// @version      1.1.2.3
 // @last         6/10/2026 (mm/dd/yyyy)
 // @description  Fix captions on youtube videos in webkit fullscreen mode on iOS (https://m.youtube.com/).
 // @match        https://m.youtube.com/*
@@ -525,15 +525,10 @@ const po = new PerformanceObserver((list) => {
 			})
 			.catch((err) => {
 				console.log(`VTT fetch failed, falling back to JSON3: ${err}`);
-				tryFetch("json3")
-					.then((json) => addCuesToTrack(track, parseJson3(json), true))
-					.catch((err) => alert(`Error adding captions: ${err}\n${err.stack}`));
-			});
-	} else {
-		tryFetch("json3")
-			.then((json) => addCuesToTrack(track, parseJson3(json), isAutoGen))
-			.catch((err) => alert(`Error adding captions: ${err}\n${err.stack}`));
-	}
+	let track = createTrack();
+	tryFetch("json3")
+		.then((json) => addCuesToTrack(track, parseJson3(json), isAutoGen))
+		.catch((err) => alert(`Error adding captions: ${err}\n${err.stack}`));
 });
 
 po.observe({ type: "resource", buffered: true });
