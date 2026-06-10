@@ -51,6 +51,5 @@ This or some-other app that is likely better.
 - Caption positioning is approximate — VTT's coordinate system does not map 1:1 to YouTube's internal layout engine
 - `PerformanceObserver` (used to detect the caption request) may miss the request if the script is injected after the network call has already completed
 - May drain battery faster
-- When not in fullscreen, both YouTube's native captions and the injected track may show simultaneously
 - May break if YouTube swaps video players mid-session (causes unknown)
 - Sends an additional fetch request for captions on top of YouTube's own request
