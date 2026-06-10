@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         MWeb Youtube Captions Patch (stable)
 // @author       Sukinyu
-// @version      1.1.2.4
+// @version      1.1.3
 // @last         6/10/2026 (mm/dd/yyyy)
 // @description  Fix captions on youtube videos in webkit fullscreen mode on iOS (https://m.youtube.com/).
 // @match        https://m.youtube.com/*
@@ -114,14 +114,14 @@ function penToCss(pen, fs) {
 	const backAlpha = rd(pen.boBackAlpha != null ? pen.boBackAlpha / 255 : 0.5);
 
 	const colorCss =
-		c != "255,255,255" || foreAlpha != 1
-			? `color: rgba(${c},${foreAlpha});`
-			: "";
+		c != "255,255,255" || foreAlpha != 1 ?
+			`color: rgba(${c},${foreAlpha});`
+		:	"";
 
 	const backgroundCss =
-		cB != "0,0,0" || backAlpha != 0.5
-			? `background: rgba(${cB},${backAlpha});`
-			: "";
+		cB != "0,0,0" || backAlpha != 0.5 ?
+			`background: rgba(${cB},${backAlpha});`
+		:	"";
 
 	// Edge effects
 	let textShadow = "";
@@ -253,22 +253,18 @@ function mapPosToCue(pos, pen, style) {
 		hor = Math.max(hor / (1 + fontSizeIncrement * 2), 2);
 	}
 
-	let align = LEFT_ANCHORS.has(anchorPoint)
-		? "left"
-		: RIGHT_ANCHORS.has(anchorPoint)
-			? "right"
-			: "";
-	let positionAlign = LEFT_ANCHORS.has(anchorPoint)
-		? "line-left"
-		: RIGHT_ANCHORS.has(anchorPoint)
-			? "line-right"
-			: "";
+	let align =
+		LEFT_ANCHORS.has(anchorPoint) ? "left"
+		: RIGHT_ANCHORS.has(anchorPoint) ? "right"
+		: "";
+	let positionAlign =
+		LEFT_ANCHORS.has(anchorPoint) ? "line-left"
+		: RIGHT_ANCHORS.has(anchorPoint) ? "line-right"
+		: "";
 	let lineAlign =
-		anchorPoint >= 3 && anchorPoint <= 5
-			? "center"
-			: anchorPoint >= 6
-				? "end"
-				: undefined;
+		anchorPoint >= 3 && anchorPoint <= 5 ? "center"
+		: anchorPoint >= 6 ? "end"
+		: undefined;
 	let vertical = "";
 
 	switch (style?.juJustifCode) {
@@ -485,24 +481,25 @@ const po = new PerformanceObserver((list) => {
 	const isAutoGen = newURL.searchParams.get("kind") === "asr";
 
 	function createTrack() {
-		let trackEl = video?.querySelector?.("track");
-		if (!trackEl) {
-			trackEl = document.createElement("track");
-			trackEl.kind = "captions";
-			trackEl.label = `Injected CC${translated ? " (TS)" : ""}`;
-			trackEl.srclang = userLang;
-			trackEl.default = true;
-			trackEl.track.mode = "showing";
-			video?.appendChild(trackEl);
+		let track =
+			video?.textTracks &&
+			[...(video?.textTracks || [])].find((t) =>
+				t.label.includes("Injected CC"),
+			);
+		if (!track) {
+			track = video.addTextTrack(
+				"captions",
+				`Injected CC${translated ? " (TS)" : ""}`,
+				userLang,
+			);
+			track.mode = "hidden"; // debug so not hidden
 			console.log("Injected captions track");
 		} else {
-			if (trackEl.track.cues) {
-				[...trackEl.track.cues].forEach((cue) =>
-					trackEl?.track?.removeCue(cue),
-				); // Clear existing cues
+			if (track.cues) {
+				[...track.cues].forEach((cue) => track?.removeCue(cue)); // Clear existing cues
 			}
 		}
-		return trackEl;
+		return track;
 	}
 
 	const tryFetch = (returnFormat) => {
@@ -514,31 +511,10 @@ const po = new PerformanceObserver((list) => {
 		});
 	};
 
-	let trackEl = createTrack();
-	if (isAutoGen) {
-		tryFetch("vtt")
-			.then((vttText) => {
-				const modified = vttText
-					.replace(/\nStyle:\n/g, "\nSTYLE\n")
-					.replace(/\n##\n/g, "");
-				trackEl.src = URL.createObjectURL(
-					new Blob([modified], { type: "text/vtt" }),
-				);
-			})
-			.catch((err) => {
-				console.log(`VTT fetch failed, falling back to JSON3: ${err}`);
-				tryFetch("json3")
-					.then((json) => addCuesToTrack(trackEl.track, parseJson3(json), true))
-					.catch((err) => alert(`Error adding captions: ${err}\n${err.stack}`));
-			});
-	} else {
-		console.log("Fetching captions in JSON3 format");
+	let track = createTrack();
 		tryFetch("json3")
-			.then((json) =>
-				addCuesToTrack(trackEl.track, parseJson3(json), isAutoGen),
-			)
+		.then((json) => addCuesToTrack(track, parseJson3(json), isAutoGen))
 			.catch((err) => alert(`Error adding captions: ${err}\n${err.stack}`));
-	}
 });
 
 po.observe({ type: "resource", buffered: true });
@@ -546,7 +522,7 @@ po.observe({ type: "resource", buffered: true });
 if (video?.src) {
 	new MutationObserver(() => {
 		const track = video?.textTracks[0];
-		if (track?.cues) [...track.cues].forEach((cue) => track?.removeCue(cue));
+		[...track.cues].forEach((cue) => track?.removeCue(cue));
 		if (track?.mode === "showing") {
 			track.mode = "hidden";
 			track.mode = "showing";
