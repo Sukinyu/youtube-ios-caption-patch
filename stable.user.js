@@ -1,19 +1,19 @@
 // ==UserScript==
 // @name         MWeb Youtube Captions Patch
 // @author       Sukinyu
-// @version      1.0.21
-// @last         5/13/2026 (mm/dd/yyyy)
+// @version      1.1.2.1
+// @last         6/10/2026 (mm/dd/yyyy)
 // @description  Fix captions on youtube videos in webkit fullscreen mode on iOS (https://m.youtube.com/).
 // @match        https://m.youtube.com/*
 // @updateURL    https://github.com/Sukinyu/youtube-ios-caption-patch/raw/refs/heads/main/stable.user.js
 // @downloadURL  https://github.com/Sukinyu/youtube-ios-caption-patch/raw/refs/heads/main/stable.user.js
 // ==/UserScript==
 
+
 const injectedUrls = new Set();
 const video = document.querySelector("video");
 const defaultFont =
 	'"YouTube Noto", Roboto, Arial, Helvetica, Verdana, "PT Sans Caption", sans-serif';
-let currentPens = [];
 const isMWEB = window.location.host.startsWith("m.");
 
 function calculateBaseFontSize(videoWidth, videoHeight) {
@@ -74,20 +74,39 @@ const parseJson3 = (json) => {
 	}
 };
 
-function penToCss(pen) {
-	if (!pen) return "color: rgba(255,255,255,1);";
+function getVideoSize(video) {
+	if (!video) return { width: 0, height: 0 };
+	if (!video?.webkitDisplayingFullscreen) {
+		return { width: video.clientWidth, height: video.clientHeight };
+	}
+	const vw = video.videoWidth;
+	const vh = video.videoHeight;
 
-	// Get video dimensions for font size calculation
-	const videoRect = video?.getBoundingClientRect();
+	const cw = window.innerWidth;
+	const ch = window.innerHeight;
 
-	// Calculate base font percent (YouTube's N3e function)
-	let fs = calculateBaseFontSize(videoRect?.width, videoRect?.height);
+	const videoAspect = vw / vh;
+	const containerAspect = cw / ch;
+
+	if (videoAspect > containerAspect) {
+		return {
+			width: cw,
+			height: cw / videoAspect,
+		};
+	}
+
+	return {
+		width: ch * videoAspect,
+		height: ch,
+	};
+}
+
+function penToCss(pen, fs) {
+	if (!pen) return "";
 
 	// Font size multiplier (YouTube's SzJ function)
-	const fontSizeIncrement = pen.szPenSize ? pen.szPenSize / 100 - 1 : 0;
-	let fontSizeMultiplier = 1 + 0.25 * fontSizeIncrement;
-	const fontSizeCss =
-		fontSizeMultiplier !== 1 ? `font-size: ${fs * fontSizeMultiplier}px;` : "";
+	const fsMult = 0.75 + (pen?.szPenSize ?? 100) / 400;
+	const fontSizeCss = fsMult !== 1 ? `font-size: ${89 * fsMult}%;` : "";
 
 	// Colors
 	const c = rgb(pen.fcForeColor ?? 0xffffff);
@@ -96,46 +115,66 @@ function penToCss(pen) {
 	const backAlpha = rd(pen.boBackAlpha != null ? pen.boBackAlpha / 255 : 0.5);
 
 	const colorCss =
-		c != "0,0,0" || foreAlpha != 1 ? `color: rgba(${c},${foreAlpha});` : "";
+		c != "255,255,255" || foreAlpha != 1 ?
+			`color: rgba(${c},${foreAlpha});`
+		:	"";
 
 	const backgroundCss =
-		backAlpha != 0 ? `background: rgba(${cB},${backAlpha});` : "";
+		cB != "0,0,0" || backAlpha != 0.5 ?
+			`background: rgba(${cB},${backAlpha});`
+		:	"";
 
 	// Edge effects
-	const edgeType = pen.etEdgeType ?? 0;
 	let textShadow = "";
-	if (edgeType) {
-		textShadow = "text-shadow: ";
-		const scale = fs / 16 / 2;
-		const K = rd(Math.max(scale, 1));
-		const v = rd(Math.max(scale * 2, 1));
-		const w = rd(Math.max(scale * 3, 1));
-		let eC = pen.ecEdgeColor != null ? `rgb(${rgb(pen.ecEdgeColor)})` : null;
-		let darkShadow = eC ?? `rgba(34, 34, 34, ${foreAlpha})`;
-		let lightShadow = eC ?? `rgba(204, 204, 204, ${foreAlpha})`;
-		switch (edgeType) {
-			case 1: // Uniform raised
+	if (pen.etEdgeType) {
+		const scale = fs / 32;
+		// Convert px -> em relative to 16px base
+		const toEm = (px) => `${rd(px / fs)}em`;
+
+		// Keep the original YouTube math
+		const K = Math.max(scale, 1);
+		//const v = Math.max(scale * 2, 1); No longer used
+		const w = Math.max(scale * 3, 1);
+		const eC = pen.ecEdgeColor != null ? `rgb(${rgb(pen.ecEdgeColor)})` : null;
+		const darkShadow = eC ?? `rgba(34, 34, 34, ${foreAlpha})`;
+		const lightShadow = eC ?? `rgba(204, 204, 204, ${foreAlpha})`;
+
+		const shadows = [];
+		switch (pen.etEdgeType) {
+			case 1: {
+				// Uniform raised
+				// Keep stepping in px logic internally
 				const step = window.devicePixelRatio >= 2 ? 0.5 : 1;
-				textShadow += Array.from(
-					{ length: Math.ceil((w - K) / step) },
-					(_, i) => `${K + i * step}px ${K + i * step}px ${darkShadow}`,
-				).join(", ");
-				break;
-			case 2: // 3D raised
-				textShadow += `${K}px ${K}px ${lightShadow}, -${K}px -${K}px ${darkShadow}`;
-				break;
-			case 3: // Glow (most common)
-				textShadow += Array(5).fill(`0 0 ${v}px ${darkShadow}`).join(", ");
-				break;
-			case 4: // Blur effect
-				const shadows = [];
-				for (let blur = w; blur <= Math.max(5 * scale, 1); blur += scale) {
-					shadows.push(`${v}px ${v}px ${rd(blur, 4)}px ${darkShadow}`);
+				for (let i = 0; i < Math.ceil((w - K) / step); i++) {
+					const ofs = i * step;
+					// shadows.push(`${toEm(val)} ${toEm(val)} ${darkShadow}`);
+					shadows.push(
+						`max(calc(0.03125em + ${ofs}px),${1 + ofs}px) max(calc(0.03125em + ${ofs}px),${1 + ofs}px) ${darkShadow}`,
+					);
 				}
-				textShadow += shadows.join(", ");
 				break;
+			}
+			case 2: // 3D raised
+				shadows.push(`max(0.03125em,1px) max(0.03125em,1px) ${lightShadow}`);
+				shadows.push(`min(-0.03125em,-1px) min(-0.03125em,-1px) ${darkShadow}`);
+				break;
+			case 3: // Glow
+				for (let i = 0; i < 5; i++) {
+					shadows.push(`0 0 max(0.0625em,1px) ${darkShadow}`);
+				}
+				break;
+			case 4: {
+				// Blur/drop shadow
+				for (let blur = w; blur <= Math.max(5 * scale, 1); blur += scale) {
+					shadows.push(
+						`max(0.09375em,1px) max(0.09375em,1px) ${toEm(blur)} ${darkShadow}`,
+					);
+				}
+				break;
+			}
 		}
-		textShadow += ";";
+		textShadow =
+			shadows.length > 0 ? `text-shadow: ${shadows.join(", ")};` : "";
 	}
 
 	// Text decorations
@@ -143,14 +182,22 @@ function penToCss(pen) {
 	const i = pen.iAttr == 1 ? "font-style: italic;" : "";
 	const u = pen.uAttr == 1 ? "text-decoration: underline;" : "";
 	const fontFamily = penFontFamily(pen);
-	const fontVariant =
-		Number(pen.fsFontStyle ?? 0) === 7 ? "font-variant: small-caps;" : "";
+	const fontVariant = [];
 	const fontFamilyCss = !fontFamily ? "" : `font-family: ${fontFamily};`;
+
+	if (pen.fsFontStyle == 7 || (pen.ofOffset ?? 1) != 1) {
+		fontVariant.push("font-variant:");
+		if (pen.fsFontStyle == 7) fontVariant.push(" small-caps");
+		if (pen.ofOffset == 0) fontVariant.push(" sub");
+		if (pen.ofOffset == 2) fontVariant.push(" super");
+		fontVariant.push(";");
+	}
 
 	const packed = pen.hgHorizGroup ? "text-combine-upright: all;" : "";
 
 	return `
-				${i} ${fontVariant} ${b} ${u}
+				${i} ${b} ${u}
+				${fontVariant.join()}
 				${colorCss}
 				${backgroundCss}
 				${fontFamilyCss}
@@ -172,69 +219,54 @@ function setCaptionStyle(cssText) {
 	styleEl.textContent = cssText;
 }
 
-function generatePenStyles() {
-	if (currentPens.length === 0) return null;
+function generatePenStyles(pens) {
+	const fs = 89 * (0.75 + (pens[0].szPenSize ?? 100) / 400);
+	let style = `::cue(c) {\nfont-family: ${defaultFont};\nfont-size: ${fs}%;\nbackground: rgba(0,0,0,0.5);${isMWEB ? "\nfont-weight: 500;" : ""}\n}\n`;
+	style += `.ytp-caption-window-container { width : 100%; !important}\n`;
+	//style += `::cue(:future) { opacity : 0; }\n`; Disabled due to people preferring the default behavior
 
-	const vRect = video?.getBoundingClientRect();
-	const fs = calculateBaseFontSize(vRect?.width, vRect?.height);
-	let style = `::cue(c) { font-family: ${defaultFont}; font-size: ${fs}px; line-height: normal;${isMWEB ? " font-weight: 500;" : ""}}\n`;
-	style += `::cue(.bg) { background: rgba(0,0,0,0.5); }\n\n`;
-
-	for (let i = 0; i < currentPens.length; i++) {
-		const pen = currentPens[i];
-		if (!pen || Object.keys(pen).length === 0) continue;
-		style += `::cue(.pen${i}) { ${penToCss(pen)} }\n`;
+	const vRect = getVideoSize(video);
+	const fontSize = calculateBaseFontSize(vRect.width, vRect.height);
+	for (let id = 1; id < pens.length; id++) {
+		if (!pens[id]) continue;
+		const css = penToCss(pens[id], fontSize);
+		if (!css) continue;
+		style += `::cue(.pen${id}) { ${css} }\n`;
 	}
 	return style;
 }
 
+const LEFT_ANCHORS = new Set([0, 3, 6]);
+const RIGHT_ANCHORS = new Set([2, 5, 8]);
+
 function mapPosToCue(pos, pen, style) {
-	pos || (pos = { avVerPos: 95, ahHorPos: 50, apPoint: 7 });
+	pos || (pos = { avVerPos: 100, ahHorPos: 50, apPoint: 7 });
 
 	const anchorPoint = pos.apPoint;
 	const hasAnchor = anchorPoint != null;
+	const verPos = pos.avVerPos ?? (isMWEB ? 93 : 98);
 
-	let ver = pos.avVerPos != null ? pos.avVerPos * 0.96 + 2 : 0;
-	let hor = pos.ahHorPos != null ? pos.ahHorPos * 0.96 + 2 : 50;
+	let ver = isMWEB ? verPos * 0.92 + 2 : verPos * 0.96 + 2;
+	let hor = (pos.ahHorPos ?? 50) * 0.96 + 2;
 
 	const fontSizeIncrement = pen?.szPenSize ? pen.szPenSize / 100 - 1 : 0;
-	if (hasAnchor && [0, 3, 6].includes(anchorPoint)) {
+	if (hasAnchor && LEFT_ANCHORS.has(anchorPoint)) {
 		hor = Math.max(hor / (1 + fontSizeIncrement * 2), 2);
-		console.log("Adjusted hor for left anchor:", hor);
 	}
 
-	let align = "";
-	let positionAlign = "";
-	let lineAlign = undefined;
+	let align =
+		LEFT_ANCHORS.has(anchorPoint) ? "left"
+		: RIGHT_ANCHORS.has(anchorPoint) ? "right"
+		: "";
+	let positionAlign =
+		LEFT_ANCHORS.has(anchorPoint) ? "line-left"
+		: RIGHT_ANCHORS.has(anchorPoint) ? "line-right"
+		: "";
+	let lineAlign =
+		anchorPoint >= 3 && anchorPoint <= 5 ? "center"
+		: anchorPoint >= 6 ? "end"
+		: undefined;
 	let vertical = "";
-
-	switch (anchorPoint) {
-		case 0:
-		case 3:
-		case 6:
-			align = "left"; // A required assumption
-			positionAlign = "line-left";
-			break;
-		case 2:
-		case 5:
-		case 8:
-			align = "right"; // A required assumption
-			positionAlign = "line-right";
-			break;
-	}
-
-	switch (anchorPoint) {
-		case 3:
-		case 4:
-		case 5:
-			lineAlign = "center";
-			break;
-		case 6:
-		case 7:
-		case 8:
-			lineAlign = "end";
-			break;
-	}
 
 	switch (style?.juJustifCode) {
 		case 0:
@@ -260,7 +292,7 @@ function mapPosToCue(pos, pen, style) {
 	}
 
 	return {
-		line: rd(ver, 2),
+		line: Math.max(rd(ver, 2), 0),
 		position: rd(hor, 2), // defaults to 'auto'
 		align: align, // defaults to 'center'
 		positionAlign: positionAlign, // Defaults to 'auto'
@@ -269,22 +301,20 @@ function mapPosToCue(pos, pen, style) {
 	};
 }
 
-function addCuesToTrack(track, json, stackProcess) {
+function addCuesToTrack(track, json, isAutoGen) {
 	const events = json.events || [];
-	const pens = json.pens || [];
+	const pens = json.pens || [{}];
 	const wpWinPositions = json.wpWinPositions || [];
 	const wsWinStyles = json.wsWinStyles || [];
 
-	// Store pens globally for resize updates
-	currentPens = pens;
-
-	updateCaptionStyles();
+	// Best solution I can think of rn
+	// TODO: Find a better solution
+	isAutoGen && isMWEB && (pens[0].szPenSize ??= 200);
 
 	// ---------- build CSS from pens + positions ----------
-	const style = generatePenStyles();
-	if (style) setCaptionStyle(style);
+	setCaptionStyle(generatePenStyles(pens));
 
-	const win = [];
+	const windowMap = new Map();
 
 	// ---------- build cues ----------
 	for (const ev of events) {
@@ -293,91 +323,98 @@ function addCuesToTrack(track, json, stackProcess) {
 
 		if (!ev.segs && ev?.id) {
 			// Handle events with no segments but have an ID (possible metadata or positioning cues)
-			let container = {
+			windowMap.set(ev.id, {
 				start: start,
 				end: end,
-				id: ev.id,
 				penId: ev.pPenId,
 				posId: ev.wpWinPosId,
 				styleId: ev.wsWinStyleId,
-			};
-			win.push(container);
+			});
 			continue;
 		}
 
 		const parts = [];
 
 		if (ev.wWinId != null) {
-			let current; // Search for the corresponding window definition
-			for (current = 0; current <= win.length; current++) {
-				if (
-					win[current].id === ev.wWinId &&
-					win[current].start <= start &&
-					win[current].end >= end
-				) {
-					break;
-				}
+			const winData = windowMap.get(ev.wWinId);
+			if (winData && winData.start <= start && winData.end >= end) {
+				ev.wpWinPosId ??= winData.posId;
+				ev.pPenId ??= winData.penId;
+				ev.wsWinStyleId ??= winData.styleId;
 			}
-			const winData = win[current] || {};
-			ev.wpWinPosId ??= winData.posId;
-			ev.pPenId ??= winData.penId;
-			ev.wsWinStyleId ??= winData.styleId;
 		}
 
+		if (ev.segs?.length === 0) continue;
+		if (ev.segs?.length === 1 && ev.segs[0].utf8 === "\n") continue; // Skip auto-generated empty cues
+
 		ev.segs.forEach((seg) => {
-			if (!seg.utf8.length) return;
+			if (!seg?.utf8.length) return;
 			if (seg.utf8 == "​") return; // 0 width space
 
 			if (seg.tOffsetMs) {
 				parts.push(`<${ts(ev.tStartMs + seg.tOffsetMs, true)}>`); // Karaoke timing
 			}
 
-			const penId = seg.pPenId != null ? seg.pPenId : ev.pPenId;
+			const penId = seg.pPenId ?? ev.pPenId ?? 0;
 
-			parts.push(penId != null ? `<c.pen${penId}>` : `<c.bg>`);
+			let p = pens[penId];
+			if (!(p.foForeAlpha || 1) && !(p.boBackAlpha || 1) /*&& !p.etEdgeType*/)
+				return; // Skip invisible pens // TODO: Handle invisible pens with edge effects instead of removing
+
+			parts.push(penId ? `<c.pen${penId}>` : "<c>"); // Apply pen style or default class
 			parts.push(seg.utf8);
 			parts.push("</c>");
 		});
 
-		if (parts.length === 3 && parts[1] == "\n") continue; // Skip empty cues from auto-gen
-
 		let cueText = parts.join("");
 		let cue = new VTTCue(start, end, cueText);
-		if (!ev.segs?.length) continue;
-		if (ev.segs[0].utf8 === "\n") continue; // Skip auto-generated empty cues
 
 		cue.snapToLines = false;
 
 		// Get position data for this event
 		const pos = wpWinPositions[ev.wpWinPosId ?? -1],
-			eventPen = pens[ev.pPenId ?? -1],
+			eventPen = pens[ev.pPenId ?? 0],
 			eventStyle = wsWinStyles[ev.wsWinStyleId ?? -1];
 		const placement = mapPosToCue(pos, eventPen, eventStyle);
 
-		cue.line = placement?.line;
-		if (placement.position != null) {
-			cue.position = rd(placement.position, 2);
-		}
-		placement.align && (cue.align = placement.align);
-		placement.positionAlign && (cue.positionAlign = placement.positionAlign);
-		placement.lineAlign && (cue.lineAlign = placement.lineAlign);
-		placement.vertical && (cue.vertical = placement.vertical);
+		cue.line = placement.line;
+		if (placement.position != null) cue.position = rd(placement.position, 2);
+		if (placement.align) cue.align = placement.align;
+		if (placement.positionAlign) cue.positionAlign = placement.positionAlign;
+		if (placement.lineAlign) cue.lineAlign = placement.lineAlign;
+		if (placement.vertical) cue.vertical = placement.vertical;
 
 		track.addCue(cue);
 	}
-	if (!stackProcess) return;
+	if (!isAutoGen) return;
 	// ---------- detect overlapping cues, merge left-align lines ----------
+	// Use event-based algorithm instead of nested loops for better performance
 	const cues = [...track.cues];
-	for (let i = 0; i < cues.length; i++) {
-		for (let j = i + 1; j < cues.length; j++) {
-			const c1 = cues[i];
-			const c2 = cues[j];
+	if (cues.length < 2) return;
+
+	// Sort by start time for efficient interval merging
+	const sorted = cues
+		.map((c, i) => ({ cue: c, idx: i }))
+		.sort((a, b) => a.cue.startTime - b.cue.startTime);
+	const toRemove = new Set();
+
+	for (let i = 0; i < sorted.length; i++) {
+		const c1 = sorted[i].cue;
+		if (toRemove.has(c1)) continue;
+
+		// Only check forward from current position
+		for (let j = i + 1; j < sorted.length; j++) {
+			const c2 = sorted[j].cue;
+			if (toRemove.has(c2)) continue;
+
+			// No more overlaps possible if c2 starts after c1 ends
+			if (c2.startTime >= c1.endTime) break;
 
 			const overlapStart = Math.max(c1.startTime, c2.startTime);
 			const overlapEnd = Math.min(c1.endTime, c2.endTime);
 			if (overlapStart >= overlapEnd) continue; // no overlap
 
-			// Combined cue for the overlapping period
+			// Merge for overlapping period
 			const merged = new VTTCue(
 				overlapStart,
 				overlapEnd,
@@ -391,21 +428,23 @@ function addCuesToTrack(track, json, stackProcess) {
 			merged.lineAlign = c1.lineAlign;
 			track.addCue(merged);
 
-			// Trim c1 — remove if it has no solo time left
+			// Trim cues
 			if (c1.startTime < overlapStart) {
 				c1.endTime = overlapStart;
 			} else {
-				track.removeCue(c1);
+				toRemove.add(c1);
 			}
 
-			// Trim c2 — remove if it has no solo time left
 			if (c2.endTime > overlapEnd) {
 				c2.startTime = overlapEnd;
 			} else {
-				track.removeCue(c2);
+				toRemove.add(c2);
 			}
 		}
 	}
+
+	// Batch remove marked cues
+	toRemove.forEach((cue) => track.removeCue(cue));
 }
 
 const po = new PerformanceObserver((list) => {
@@ -449,13 +488,12 @@ const po = new PerformanceObserver((list) => {
 				t.label.includes("Injected CC"),
 			);
 		if (!track) {
-			video || (video = document.querySelector("video"));
 			track = video.addTextTrack(
 				"captions",
 				`Injected CC${translated ? " (TS)" : ""}`,
 				userLang,
 			);
-			track.mode = "showing";
+			track.mode = "hidden"; // debug so not hidden
 			console.log("Injected captions track");
 		} else {
 			if (track.cues) {
@@ -473,7 +511,7 @@ const po = new PerformanceObserver((list) => {
 			return r.text();
 		});
 	};
-
+	
 	let track = createTrack();
 	if (isAutoGen) {
 		tryFetch("vtt")
