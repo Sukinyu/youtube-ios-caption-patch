@@ -365,6 +365,10 @@ function addCuesToTrack(track, json, isAutoGen) {
 			parts.push("</c>");
 		});
 
+		// Test adding padding through " "
+		parts.unshift("<c> </c>");
+		parts.push("<c> </c>");
+
 		let cueText = parts.join("");
 		let cue = new VTTCue(start, end, cueText);
 
@@ -492,7 +496,7 @@ const po = new PerformanceObserver((list) => {
 				`Injected CC${translated ? " (TS)" : ""}`,
 				userLang,
 			);
-			track.mode = "hidden"; // debug so not hidden
+			track.mode = "hidden";
 			console.log("Injected captions track");
 		} else {
 			if (track.cues) {
