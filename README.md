@@ -26,8 +26,8 @@ Test videos:
 
 | File                 | Description                                                                                       |
 | -------------------- | ------------------------------------------------------------------------------------------------- |
-| `beta.user.js`       | Active development. Uses `VTTCue` objects directly. Most up to date.                              |
-| `stable.user.js`     | A somewhat more stable version. Will fallback to requesting VTT. Won't convert auto-gen captions. |
+| `beta.user.js`       | Active development. Most up to date.                                                              |
+| `stable.user.js`     | A somewhat more stable version.                                                                   |
 | `ytt-srv3-to-vtt.js` | Standalone JSON3 → VTT string converter. Originally was within stable.js; No longer maintained.   |
  
 `stable.user.js` is recommended. `beta.user.js` is used for more new features/support however may break often.  
@@ -44,7 +44,9 @@ Test videos:
 
 Use Hyperweb, an app that is no longer maintained, and create an advanced local enhancement.  
 This or some-other app that is likely better.
-
+ 
+## Current focus: Resolve the need for sending Youtube another request when captions are NOT translated
+-# Next focus: Improve the internal selection of languages to better select the assumed wanted language (override support).
 
 ## Known Issues
 
