@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         MWeb Youtube Captions Patch (beta)
 // @author       Sukinyu
-// @version      1.1.4
+// @version      1.1.5
 // @last         6/11/2026 (mm/dd/yyyy)
 // @description  Fix captions on youtube videos in webkit fullscreen mode on iOS (https://m.youtube.com/).
 // @match        https://m.youtube.com/*
@@ -366,8 +366,14 @@ function addCuesToTrack(track, json, isAutoGen) {
 		});
 
 		// Test adding padding through " "
-		parts.unshift("<c> </c>");
-		parts.push("<c> </c>");
+		{
+			if (!parts[1].startsWith(" ") || !parts[1].startsWith("​ "))
+				parts[1] = " " + parts[1];
+
+			const end = parts.length - 2;
+			if (!parts[end].endsWith(" ") || !parts[end].endsWith(" ​"))
+				parts[end] = parts[end] + " ";
+		}
 
 		let cueText = parts.join("");
 		let cue = new VTTCue(start, end, cueText);
