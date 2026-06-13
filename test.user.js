@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         MWeb Youtube Captions Patch (dev)
 // @author       Sukinyu
-// @version      51
+// @version      52
 // @match        https://m.youtube.com/*
 // @updateURL    https://github.com/Sukinyu/youtube-ios-caption-patch/raw/refs/heads/main/test.user.js
 // @downloadURL  https://github.com/Sukinyu/youtube-ios-caption-patch/raw/refs/heads/main/test.user.js
