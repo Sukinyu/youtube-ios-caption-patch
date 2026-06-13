@@ -922,7 +922,7 @@ XMLHttpRequest.prototype.open = function (...args) {
 		const url = this.responseURL;
 		if (!url.includes("/api/timedtext") || injectedUrls.has(url)) return;
 		injectedUrls.add(url);
-		console.log("Caption request detected:", url);
+		alert("Caption request detected:", url); // For now, so I can view the url to verify it is fine for use
 		const _url = new URL(url);
 		const userLang = navigator.language.split("-")[0] || "en"; // Use browser language or default to English
 
