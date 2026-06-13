@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         MWeb Youtube Captions Patch (dev)
 // @author       Sukinyu
-// @version      50
+// @version      51
 // @match        https://m.youtube.com/*
 // @updateURL    https://github.com/Sukinyu/youtube-ios-caption-patch/raw/refs/heads/main/test.user.js
 // @downloadURL  https://github.com/Sukinyu/youtube-ios-caption-patch/raw/refs/heads/main/test.user.js
@@ -764,78 +764,78 @@ function addCuesToTrack(track, json, isAutoGen) {
 	toRemove.forEach((cue) => track.removeCue(cue));
 }
 
-const po = new PerformanceObserver((list) => {
-	if (!window.location.pathname.startsWith("/watch")) return;
-	const entries = list.getEntries();
-	const url = entries[entries.length - 1].name;
-	if (!url.includes("/api/timedtext") || injectedUrls.has(url)) return;
-	injectedUrls.add(url);
-	console.log("Caption request detected:", url);
-	let newURL = new URL(url);
-	const removeParams = [
-		"potc",
-		"xorb",
-		"xobt",
-		"xovt",
-		"cbr",
-		"cbrver",
-		"cver",
-		"cplayer",
-		"cos",
-		"cosver",
-		"cplatform",
-	];
-	[...newURL.searchParams.keys()].forEach(
-		(key) => removeParams.includes(key) && newURL.searchParams.delete(key),
-	);
-	const userLang = navigator.language.split("-")[0] || "en"; // Use browser language or default to English
-	if (
-		!newURL.searchParams.has("lang", userLang) &&
-		!newURL.searchParams.has("tlang")
-	) {
-		newURL.searchParams.set("tlang", userLang);
-	}
-	const translated = newURL.searchParams.has("tlang");
-	const isAutoGen = newURL.searchParams.get("kind") === "asr";
+// const po = new PerformanceObserver((list) => {
+// 	if (!window.location.pathname.startsWith("/watch")) return;
+// 	const entries = list.getEntries();
+// 	const url = entries[entries.length - 1].name;
+// 	if (!url.includes("/api/timedtext") || injectedUrls.has(url)) return;
+// 	injectedUrls.add(url);
+// 	console.log("Caption request detected:", url);
+// 	let newURL = new URL(url);
+// 	const removeParams = [
+// 		"potc",
+// 		"xorb",
+// 		"xobt",
+// 		"xovt",
+// 		"cbr",
+// 		"cbrver",
+// 		"cver",
+// 		"cplayer",
+// 		"cos",
+// 		"cosver",
+// 		"cplatform",
+// 	];
+// 	[...newURL.searchParams.keys()].forEach(
+// 		(key) => removeParams.includes(key) && newURL.searchParams.delete(key),
+// 	);
+// 	const userLang = navigator.language.split("-")[0] || "en"; // Use browser language or default to English
+// 	if (
+// 		!newURL.searchParams.has("lang", userLang) &&
+// 		!newURL.searchParams.has("tlang")
+// 	) {
+// 		newURL.searchParams.set("tlang", userLang);
+// 	}
+// 	const translated = newURL.searchParams.has("tlang");
+// 	const isAutoGen = newURL.searchParams.get("kind") === "asr";
 
-	function createTrack() {
-		let track =
-			video?.textTracks &&
-			[...(video?.textTracks || [])].find((t) =>
-				t.label.includes("Injected CC"),
-			);
-		if (!track) {
-			track = video.addTextTrack(
-				"captions",
-				`Injected CC${translated ? " (TS)" : ""}`,
-				userLang,
-			);
-			track.mode = "showing"; // debug so not hidden
-			console.log("Injected captions track");
-		} else {
-			if (track.cues) {
-				[...track.cues].forEach((cue) => track?.removeCue(cue)); // Clear existing cues
-			}
-		}
-		return track;
-	}
+// 	function createTrack() {
+// 		let track =
+// 			video?.textTracks &&
+// 			[...(video?.textTracks || [])].find((t) =>
+// 				t.label.includes("Injected CC"),
+// 			);
+// 		if (!track) {
+// 			track = video.addTextTrack(
+// 				"captions",
+// 				`Injected CC${translated ? " (TS)" : ""}`,
+// 				userLang,
+// 			);
+// 			track.mode = "showing"; // debug so not hidden
+// 			console.log("Injected captions track");
+// 		} else {
+// 			if (track.cues) {
+// 				[...track.cues].forEach((cue) => track?.removeCue(cue)); // Clear existing cues
+// 			}
+// 		}
+// 		return track;
+// 	}
 
-	const tryFetch = (returnFormat) => {
-		newURL.searchParams.set("fmt", returnFormat);
-		injectedUrls.add(newURL.toString());
-		return fetch(newURL).then((r) => {
-			if (!r.ok) throw new Error(`HTTP ${r.status}`);
-			return r.text();
-		});
-	};
+// 	const tryFetch = (returnFormat) => {
+// 		newURL.searchParams.set("fmt", returnFormat);
+// 		injectedUrls.add(newURL.toString());
+// 		return fetch(newURL).then((r) => {
+// 			if (!r.ok) throw new Error(`HTTP ${r.status}`);
+// 			return r.text();
+// 		});
+// 	};
 
-	let track = createTrack();
-	tryFetch("json3")
-		.then((json) => addCuesToTrack(track, parseJson3(json), isAutoGen))
-		.catch((err) => alert(`Error adding captions: ${err}\n${err.stack}`));
-});
+// 	let track = createTrack();
+// 	tryFetch("json3")
+// 		.then((json) => addCuesToTrack(track, parseJson3(json), isAutoGen))
+// 		.catch((err) => alert(`Error adding captions: ${err}\n${err.stack}`));
+// });
 
-po.observe({ type: "resource", buffered: true });
+// po.observe({ type: "resource", buffered: true });
 
 if (video?.src) {
 	new MutationObserver(() => {
@@ -913,3 +913,51 @@ createCaptionEditorButton(() => {
 		buildCueList(track);
 	}
 });
+
+const origOpen = XMLHttpRequest.prototype.open;
+
+XMLHttpRequest.prototype.open = function (...args) {
+	this.addEventListener("load", () => {
+		if (!window.location.pathname.startsWith("/watch")) return;
+		const url = this.responseURL;
+		if (!url.includes("/api/timedtext") || injectedUrls.has(url)) return;
+		injectedUrls.add(url);
+		console.log("Caption request detected:", url);
+		const _url = new URL(url);
+		const userLang = navigator.language.split("-")[0] || "en"; // Use browser language or default to English
+
+		const translated = _url.searchParams.has("tlang");
+		const isAutoGen = _url.searchParams.get("kind") === "asr";
+
+		function createTrack() {
+			let track =
+				video?.textTracks &&
+				[...(video?.textTracks || [])].find((t) =>
+					t.label.includes("Injected CC"),
+				);
+			if (!track) {
+				track = video.addTextTrack(
+					"captions",
+					`Injected CC${translated ? " (TS)" : ""}`,
+					userLang,
+				);
+				track.mode = "showing"; // debug so not hidden
+				console.log("Injected captions track");
+			} else {
+				if (track.cues) {
+					[...track.cues].forEach((cue) => track?.removeCue(cue)); // Clear existing cues
+				}
+			}
+			return track;
+		}
+
+		try {
+			let track = createTrack();
+			addCuesToTrack(track, parseJson3(this.responseText), isAutoGen);
+		} catch (err) {
+			alert(`Error adding captions: ${err}\n${err.stack}`);
+		}
+	});
+
+	return origOpen.apply(this, args);
+};
