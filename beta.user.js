@@ -368,11 +368,11 @@ function addCuesToTrack(track, json, isAutoGen) {
 		// Test adding padding through " "
 		{
 			if (!parts[1].startsWith(" ") || !parts[1].startsWith("​ "))
-				parts[1] = " " + parts[1];
+				parts[1] = "​" + parts[1];
 
 			const end = parts.length - 2;
 			if (!parts[end].endsWith(" ") || !parts[end].endsWith(" ​"))
-				parts[end] = parts[end] + " ";
+				parts[end] = parts[end] + "​";
 		}
 
 		let cueText = parts.join("");
