@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         MWeb Youtube Captions Patch (dev)
 // @author       Sukinyu
-// @version      52
+// @version      53
 // @match        https://m.youtube.com/*
 // @updateURL    https://github.com/Sukinyu/youtube-ios-caption-patch/raw/refs/heads/main/test.user.js
 // @downloadURL  https://github.com/Sukinyu/youtube-ios-caption-patch/raw/refs/heads/main/test.user.js
@@ -922,7 +922,7 @@ XMLHttpRequest.prototype.open = function (...args) {
 		const url = this.responseURL;
 		if (!url.includes("/api/timedtext") || injectedUrls.has(url)) return;
 		injectedUrls.add(url);
-		alert("Caption request detected:", url); // For now, so I can view the url to verify it is fine for use
+		alert("Caption request detected:\n" + url); // For now, so I can view the url to verify it is fine for use
 		const _url = new URL(url);
 		const userLang = navigator.language.split("-")[0] || "en"; // Use browser language or default to English
 
