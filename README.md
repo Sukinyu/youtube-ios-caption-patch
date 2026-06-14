@@ -38,20 +38,16 @@ Test videos:
 
 1. Install a userscript manager on iOS — [UserScripts](https://apps.apple.com/app/userscripts/id1463298887) (free, open source) or [Tampermonkey](https://apps.apple.com/app/tampermonkey/id1482490089)
 2. Download the `stable`/`beta`, or install directly via the raw URL
-3. The userscript manager will detect the `==UserScript==` metadata block and install it automatically
+3. Let the userscript manager detect the userscript and select *install*
 
 ### As raw JavaScript
+**As of `1.2.0`, this method may not be supported.**
 
 Use Hyperweb, an app that is no longer maintained, and create an advanced local enhancement.  
-This or some-other app that is likely better.
+This or some-other app that is likely better for this method.
  
-## Current focus: Resolve the need for sending Youtube another request when captions are NOT translated
--# Next focus: Improve the internal selection of languages to better select the assumed wanted language (override support).
-
 ## Known Issues
 
-- Caption positioning is approximate — VTT's coordinate system does not map 1:1 to YouTube's internal layout engine
-- `PerformanceObserver` (used to detect the caption request) may miss the request if the script is injected after the network call has already completed
-- May drain battery faster
+- Caption positioning is approximate — VTT's coordinate system does not map 1:1 to YouTube's internal layout engine when video size matches device size
+- May drain battery faster (Amount unknown)
 - May break if YouTube swaps video players mid-session (causes unknown)
-- Sends an additional fetch request for captions on top of YouTube's own request
