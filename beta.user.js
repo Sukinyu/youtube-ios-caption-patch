@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         MWeb Youtube Captions Patch (beta)
 // @author       Sukinyu
-// @version      1.1.6
-// @last         6/12/2026 (mm/dd/yyyy)
+// @version      1.2.0
+// @last         6/13/2026 (mm/dd/yyyy)
 // @description  Fix captions on youtube videos in webkit fullscreen mode on iOS (https://m.youtube.com/).
 // @match        https://m.youtube.com/*
 // @updateURL    https://github.com/Sukinyu/youtube-ios-caption-patch/raw/refs/heads/main/beta.user.js
@@ -222,6 +222,7 @@ function generatePenStyles(pens) {
 	const fs = 89 * (0.75 + (pens[0].szPenSize ?? 100) / 400);
 	let style = `::cue(c) {\nfont-family: ${defaultFont};\nfont-size: ${fs}%;\nbackground: rgba(0,0,0,0.5);${isMWEB ? "\nfont-weight: 500;" : ""}\n}\n`;
 	style += `.ytp-caption-window-container { width : 100%; !important}\n`;
+	style += `::cue(c:past) { opacity: inherit; color: inherit; }` // Fix to fullscreen breaking karaoke text?
 	//style += `::cue(:future) { opacity : 0; }\n`; Disabled due to people preferring the default behavior
 
 	const vRect = getVideoSize(video);
@@ -365,16 +366,6 @@ function addCuesToTrack(track, json, isAutoGen) {
 			parts.push("</c>");
 		});
 
-		// Test adding padding through " "
-		{
-			if (!parts[1].startsWith(" ") || !parts[1].startsWith("​ "))
-				parts[1] = "​" + parts[1];
-
-			const end = parts.length - 2;
-			if (!parts[end].endsWith(" ") || !parts[end].endsWith(" ​"))
-				parts[end] = parts[end] + "​";
-		}
-
 		let cueText = parts.join("");
 		let cue = new VTTCue(start, end, cueText);
 
@@ -455,79 +446,86 @@ function addCuesToTrack(track, json, isAutoGen) {
 	// Batch remove marked cues
 	toRemove.forEach((cue) => track.removeCue(cue));
 }
+const origOpen = XMLHttpRequest.prototype.open;
 
-const po = new PerformanceObserver((list) => {
-	if (!window.location.pathname.startsWith("/watch")) return;
-	const entries = list.getEntries();
-	const url = entries[entries.length - 1].name;
-	if (!url.includes("/api/timedtext") || injectedUrls.has(url)) return;
-	injectedUrls.add(url);
-	console.log("Caption request detected:", url);
-	let newURL = new URL(url);
-	const removeParams = [
-		"potc",
-		"xorb",
-		"xobt",
-		"xovt",
-		"cbr",
-		"cbrver",
-		"cver",
-		"cplayer",
-		"cos",
-		"cosver",
-		"cplatform",
-	];
-	[...newURL.searchParams.keys()].forEach(
-		(key) => removeParams.includes(key) && newURL.searchParams.delete(key),
-	);
-	const userLang = navigator.language.split("-")[0] || "en"; // Use browser language or default to English
-	if (
-		!newURL.searchParams.has("lang", userLang) &&
-		!newURL.searchParams.has("tlang")
-	) {
-		newURL.searchParams.set("tlang", userLang);
-	}
-	const translated = newURL.searchParams.has("tlang");
-	const isAutoGen = newURL.searchParams.get("kind") === "asr";
+XMLHttpRequest.prototype.open = function (...args) {
+	this.addEventListener("load", () => {
+		if (!window.location.pathname.startsWith("/watch")) return;
+		const url = this.responseURL;
+		if (!url.includes("/api/timedtext") || injectedUrls.has(url)) return;
+		injectedUrls.add(url);
+		console.log("Caption request detected:", url);
+		let newURL = new URL(url);
+		const userLang = navigator.language.split("-")[0] || "en"; // Use browser language or default to English
+		const isWantedLang = newURL.searchParams.get("lang")?.startsWith(userLang);
+		const isAutoGen = newURL.searchParams.get("kind") === "asr";
 
-	function createTrack() {
-		let track =
-			video?.textTracks &&
-			[...(video?.textTracks || [])].find((t) =>
-				t.label.includes("Injected CC"),
-			);
-		if (!track) {
-			track = video.addTextTrack(
-				"captions",
-				`Injected CC${translated ? " (TS)" : ""}`,
-				userLang,
-			);
-			track.mode = "hidden";
-			console.log("Injected captions track");
-		} else {
-			if (track.cues) {
-				[...track.cues].forEach((cue) => track?.removeCue(cue)); // Clear existing cues
+		const removeParams = [
+			"potc",
+			"xorb",
+			"xobt",
+			"xovt",
+			"cbr",
+			"cbrver",
+			"cver",
+			"cplayer",
+			"cos",
+			"cosver",
+			"cplatform",
+		];
+
+		const tryFetch = (returnFormat) => {
+			newURL.searchParams.set("fmt", returnFormat);
+			injectedUrls.add(newURL.toString());
+			return fetch(newURL).then((r) => {
+				if (!r.ok) throw new Error(`HTTP ${r.status}`);
+				return r.text();
+			});
+		};
+
+		function createTrack() {
+			let track =
+				video?.textTracks &&
+				[...(video?.textTracks || [])].find((t) =>
+					t.label.startsWith("Injected CC"),
+				);
+			const language =
+				newURL.searchParams.get("tlang") ||
+				newURL.searchParams.get("lang") ||
+				userLang;
+			if (!track) {
+				track = video.addTextTrack(
+					"captions",
+					`Injected CC${newURL.searchParams.has("tlang") ? " (TS)" : ""}`,
+					language,
+				);
+				track.mode = "hidden";
+				console.log("Injected captions track");
+			} else {
+				if (track.cues) {
+					[...track.cues].forEach((cue) => track?.removeCue(cue)); // Clear existing cues
+				}
 			}
+			return track;
 		}
-		return track;
-	}
 
-	const tryFetch = (returnFormat) => {
-		newURL.searchParams.set("fmt", returnFormat);
-		injectedUrls.add(newURL.toString());
-		return fetch(newURL).then((r) => {
-			if (!r.ok) throw new Error(`HTTP ${r.status}`);
-			return r.text();
-		});
-	};
+		if (!isWantedLang && !newURL.searchParams.has("tlang")) {
+			[...newURL.searchParams.keys()].forEach(
+				(key) => removeParams.includes(key) && newURL.searchParams.delete(key),
+			);
+			newURL.searchParams.set("tlang", userLang);
 
-	let track = createTrack();
-	tryFetch("json3")
-		.then((json) => addCuesToTrack(track, parseJson3(json), isAutoGen))
-		.catch((err) => alert(`Error adding captions: ${err}\n${err.stack}`));
-});
-
-po.observe({ type: "resource", buffered: true });
+			const track = createTrack();
+			tryFetch("json3")
+				.then((json) => addCuesToTrack(track, parseJson3(json), isAutoGen))
+				.catch((err) => alert(`Error adding captions: ${err}\n${err.stack}`));
+		} else {
+			const track = createTrack();
+			addCuesToTrack(track, parseJson3(this.responseText), isAutoGen);
+		}
+	});
+	return origOpen.apply(this, args);
+};
 
 if (video?.src) {
 	new MutationObserver(() => {
