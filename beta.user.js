@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         MWeb Youtube Captions Patch (beta)
 // @author       Sukinyu
-// @version      1.2.0
-// @last         6/13/2026 (mm/dd/yyyy)
+// @version      1.2.1
+// @last         6/25/2026 (mm/dd/yyyy)
 // @description  Fix captions on youtube videos in webkit fullscreen mode on iOS (https://m.youtube.com/).
 // @match        https://m.youtube.com/*
 // @updateURL    https://github.com/Sukinyu/youtube-ios-caption-patch/raw/refs/heads/main/beta.user.js
@@ -10,7 +10,11 @@
 // ==/UserScript==
 
 const injectedUrls = new Set();
-const video = document.querySelector("video");
+// const video = document.querySelector("video");
+const video = () =>
+	document.querySelectorAll("video")[
+		document.querySelectorAll("video").length - 1
+	];
 const defaultFont =
 	'"YouTube Noto", Roboto, Arial, Helvetica, Verdana, "PT Sans Caption", sans-serif';
 const isMWEB = window.location.host.startsWith("m.");
@@ -220,12 +224,12 @@ function setCaptionStyle(cssText) {
 
 function generatePenStyles(pens) {
 	const fs = 89 * (0.75 + (pens[0].szPenSize ?? 100) / 400);
-	let style = `::cue(c) {\nfont-family: ${defaultFont};\nfont-size: ${fs}%;\nbackground: rgba(0,0,0,0.5);${isMWEB ? "\nfont-weight: 500;" : ""}\n}\n`;
+	let style = `::cue(c) {\nfont-family: ${defaultFont};\nfont-size: ${fs}%;\nbackground: rgba(0,0,0,0.65);${isMWEB ? "\nfont-weight: 500;" : ""}\n}\n`;
 	style += `.ytp-caption-window-container { width : 100%; !important}\n`;
-	style += `::cue(c:past) { opacity: inherit; color: inherit; }` // Fix to fullscreen breaking karaoke text?
+	style += `::cue(:future) { opacity : 0.75; }\n`; // Possible improvement to full screen behavior with karaoke timing? 
 	//style += `::cue(:future) { opacity : 0; }\n`; Disabled due to people preferring the default behavior
 
-	const vRect = getVideoSize(video);
+	const vRect = getVideoSize(video());
 	const fontSize = calculateBaseFontSize(vRect.width, vRect.height);
 	for (let id = 1; id < pens.length; id++) {
 		if (!pens[id]) continue;
@@ -485,8 +489,8 @@ XMLHttpRequest.prototype.open = function (...args) {
 
 		function createTrack() {
 			let track =
-				video?.textTracks &&
-				[...(video?.textTracks || [])].find((t) =>
+				video()?.textTracks &&
+				[...(video()?.textTracks || [])].find((t) =>
 					t.label.startsWith("Injected CC"),
 				);
 			const language =
@@ -494,7 +498,7 @@ XMLHttpRequest.prototype.open = function (...args) {
 				newURL.searchParams.get("lang") ||
 				userLang;
 			if (!track) {
-				track = video.addTextTrack(
+				track = video().addTextTrack(
 					"captions",
 					`Injected CC${newURL.searchParams.has("tlang") ? " (TS)" : ""}`,
 					language,
@@ -527,20 +531,20 @@ XMLHttpRequest.prototype.open = function (...args) {
 	return origOpen.apply(this, args);
 };
 
-if (video?.src) {
+if (video()?.src) {
 	new MutationObserver(() => {
-		const track = video?.textTracks[0];
+		const track = video()?.textTracks[0];
 		[...track.cues].forEach((cue) => track?.removeCue(cue));
 		if (track?.mode === "showing") {
 			track.mode = "hidden";
 			track.mode = "showing";
 		} // Refresh
-	}).observe(video, { attributeFilter: ["src"] });
+	}).observe(video(), { attributeFilter: ["src"] });
 }
 
-video?.addEventListener("webkitbeginfullscreen", () => {
-	video?.textTracks[0] && (video.textTracks[0].mode = "showing");
+video()?.addEventListener("webkitbeginfullscreen", () => {
+	video()?.textTracks[0] && (video().textTracks[0].mode = "showing");
 });
-video?.addEventListener("webkitendfullscreen", () => {
-	video?.textTracks[0] && (video.textTracks[0].mode = "hidden");
+video()?.addEventListener("webkitendfullscreen", () => {
+	video()?.textTracks[0] && (video().textTracks[0].mode = "hidden");
 });
