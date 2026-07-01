@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         MWeb Youtube Captions Patch (beta)
 // @author       Sukinyu
-// @version      1.2.2
+// @version      1.2.3
 // @last         6/30/2026 (mm/dd/yyyy)
 // @description  Fix captions on youtube videos in webkit fullscreen mode on iOS (https://m.youtube.com/).
 // @match        https://m.youtube.com/*
@@ -15,6 +15,7 @@ var video = getVideo();
 const defaultFont =
 	'"YouTube Noto", Roboto, Arial, Helvetica, Verdana, "PT Sans Caption", sans-serif';
 const isMWEB = window.location.host.startsWith("m.");
+var track = null;
 
 function calculateBaseFontSize(videoWidth, videoHeight) {
 	let baseSize = (videoHeight / 360) * 16;
@@ -301,7 +302,7 @@ function mapPosToCue(pos, pen, style) {
 	};
 }
 
-function addCuesToTrack(track, json, isAutoGen) {
+function addCuesToTrack(json, isAutoGen) {
 	const events = json.events || [];
 	const pens = json.pens || [{}];
 	const wpWinPositions = json.wpWinPositions || [];
@@ -482,13 +483,7 @@ XMLHttpRequest.prototype.open = function (...args) {
 				return r.text();
 			});
 		};
-
 		function createTrack() {
-			let track =
-				video?.textTracks &&
-				[...(video?.textTracks || [])].find((t) =>
-					t.label.startsWith("Injected CC"),
-				);
 			const language =
 				newURL.searchParams.get("tlang") ||
 				newURL.searchParams.get("lang") ||
@@ -500,13 +495,13 @@ XMLHttpRequest.prototype.open = function (...args) {
 					language,
 				);
 				track.mode = "hidden";
+				initVideo();
 				console.log("Injected captions track");
 			} else {
 				if (track.cues) {
 					[...track.cues].forEach((cue) => track?.removeCue(cue)); // Clear existing cues
 				}
 			}
-			return track;
 		}
 
 		if (!isWantedLang && !newURL.searchParams.has("tlang")) {
@@ -515,14 +510,15 @@ XMLHttpRequest.prototype.open = function (...args) {
 			);
 			newURL.searchParams.set("tlang", userLang);
 
-			const track = createTrack();
+			createTrack();
 			tryFetch("json3")
-				.then((json) => addCuesToTrack(track, parseJson3(json), isAutoGen))
+				.then((json) => addCuesToTrack(parseJson3(json), isAutoGen))
 				.catch((err) => alert(`Error adding captions: ${err}\n${err.stack}`));
 		} else {
-			const track = createTrack();
-			addCuesToTrack(track, parseJson3(this.responseText), isAutoGen);
+			createTrack();
+			addCuesToTrack(parseJson3(this.responseText), isAutoGen);
 		}
+
 	});
 	return origOpen.apply(this, args);
 };
@@ -540,27 +536,26 @@ if (video?.src) {
 }
 */
 
-function initVideo(video) {
-	console.log("Video (re)initialized");
+function initVideo() {
+	console.log("Video caption handlers initialized");
 
 	// fullscreen hooks
 	video.addEventListener("webkitbeginfullscreen", () => {
-		const t = findTrack(video);
-		if (t) t.mode = "showing";
+		track && (track.mode = "showing");
 	});
 
 	video.addEventListener("webkitendfullscreen", () => {
-		const t = findTrack(video);
-		if (t) t.mode = "hidden";
+		track && (track.mode = "hidden");
 	});
 
 	new MutationObserver(() => {
-		const track = video?.textTracks[0];
+		if (!track.cues.length) return;
 		[...track.cues].forEach((cue) => track?.removeCue(cue));
 		if (track?.mode === "showing") {
 			track.mode = "hidden";
 			track.mode = "showing";
 		} // Refresh
+		console.log("Cleared cues");
 	}).observe(video, { attributeFilter: ["src"] });
 }
 
@@ -575,16 +570,18 @@ video?.addEventListener("webkitendfullscreen", () => {
 
 const videoObserver = new MutationObserver(() => {
 	const v = getVideo();
-	if (!v) return;
+	if (!v || v.textTracks[0]) return;
 
 	// only re-init if track missing or new video detected
-	if (!window.video || window.video !== v) {
-		window.video = v;
-		initVideo(v);
-	}
+	if (!window.video || window.video !== v) return;
+	window.video = v;
+	const _track = video?.addTextTrack(track.kind, track.label, track.language);
+	_track.mode = track.mode;
+	[...track.cues].forEach((cue) => _track.addCue(cue));
+	track = _track;
+
+	initVideo();
 });
-console.log(document.querySelector("div.html5-video-container"));
 videoObserver.observe(document.querySelector("div.html5-video-container"), {
 	childList: true,
-	subtree: true,
 });
