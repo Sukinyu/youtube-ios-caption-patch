@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         MWeb Youtube Captions Patch (dev)
 // @author       Sukinyu
-// @version      56
+// @version      57
 // @match        https://m.youtube.com/*
 // @updateURL    https://github.com/Sukinyu/youtube-ios-caption-patch/raw/refs/heads/main/test.user.js
 // @downloadURL  https://github.com/Sukinyu/youtube-ios-caption-patch/raw/refs/heads/main/test.user.js
@@ -572,8 +572,8 @@ function generatePenStyles(pens) {
 const LEFT_ANCHORS = new Set([0, 3, 6]);
 const RIGHT_ANCHORS = new Set([2, 5, 8]);
 
-/** @param {Json3WinPos} pos @param {Json3Pen} pen @param {Json3WinStyle} style */
-function mapPosToCue(pos, pen, style) {
+/** @param {Json3WinPos} pos @param {Json3Pen} pen @param {Json3WinStyle} style @param {boolean} isAutoGen*/
+function mapPosToCue(pos, pen, style, isAutoGen) {
 	pos || (pos = { avVerPos: 100, ahHorPos: 50, apPoint: 7 });
 
 	const anchorPoint = pos.apPoint;
@@ -583,7 +583,9 @@ function mapPosToCue(pos, pen, style) {
 	let ver = isMWEB ? verPos * 0.92 + 2 : verPos * 0.96 + 2;
 	let hor = (pos.ahHorPos ?? 50) * 0.96 + 2;
 
-	const fontSizeIncrement = pen?.szPenSize ? pen.szPenSize / 100 - 1 : 0;
+	const fontSizeIncrement =
+		(pen?.szPenSize ? pen.szPenSize / 100 - 1 : 0) +
+		(isAutoGen && isMWEB ? 1 : 0);
 	if (hasAnchor && LEFT_ANCHORS.has(anchorPoint)) {
 		hor = Math.max(hor / (1 + fontSizeIncrement * 2), 2);
 	}
@@ -711,7 +713,7 @@ function addCuesToTrack(json, isAutoGen) {
 		const pos = wpWinPositions[ev.wpWinPosId ?? -1],
 			eventPen = pens[ev.pPenId ?? 0],
 			eventStyle = wsWinStyles[ev.wsWinStyleId ?? -1];
-		const placement = mapPosToCue(pos, eventPen, eventStyle);
+		const placement = mapPosToCue(pos, eventPen, eventStyle, isAutoGen);
 
 		cue.line = placement.line;
 		if (placement.position != null) cue.position = rd(placement.position, 2);
