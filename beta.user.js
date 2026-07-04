@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         MWeb Youtube Captions Patch (beta)
 // @author       Sukinyu
-// @version      1.2.5
+// @version      1.2.6
 // @last         7/4/2026 (mm/dd/yyyy)
 // @description  Fix captions on youtube videos in webkit fullscreen mode on iOS (https://m.youtube.com/).
 // @match        https://m.youtube.com/*
@@ -10,10 +10,7 @@
 // ==/UserScript==
 
 const injectedUrls = new Set();
-const getVideo = () => {
-	const videos = document.querySelectorAll("video");
-	return videos[videos.length - 1];
-}
+const getVideo = () => document.querySelector("video");
 var video = getVideo();
 const defaultFont =
 	'"YouTube Noto", Roboto, Arial, Helvetica, Verdana, "PT Sans Caption", sans-serif';
@@ -311,12 +308,6 @@ function addCuesToTrack(json, isAutoGen) {
 	const wpWinPositions = json.wpWinPositions || [];
 	const wsWinStyles = json.wsWinStyles || [];
 
-/*
-	// Best solution I can think of rn
-	// TODO: Find a better solution
-	isAutoGen && isMWEB && (pens[0].szPenSize ??= 200);
-	*/
-
 	// ---------- build CSS from pens + positions ----------
 	setCaptionStyle(generatePenStyles(pens));
 
@@ -528,19 +519,6 @@ XMLHttpRequest.prototype.open = function (...args) {
 	return origOpen.apply(this, args);
 };
 
-/*
-if (video?.src) {
-	new MutationObserver(() => {
-		const track = video?.textTracks[0];
-		[...track.cues].forEach((cue) => track?.removeCue(cue));
-		if (track?.mode === "showing") {
-			track.mode = "hidden";
-			track.mode = "showing";
-		} // Refresh
-	}).observe(video, { attributeFilter: ["src"] });
-}
-*/
-
 function initVideo() {
 	console.log("Video caption handlers initialized");
 
@@ -563,15 +541,6 @@ function initVideo() {
 		console.log("Cleared cues");
 	}).observe(video, { attributeFilter: ["src"] });
 }
-
-/*
-video?.addEventListener("webkitbeginfullscreen", () => {
-	video?.textTracks[0] && (video.textTracks[0].mode = "showing");
-});
-video?.addEventListener("webkitendfullscreen", () => {
-	video?.textTracks[0] && (video.textTracks[0].mode = "hidden");
-});
-*/
 
 const videoObserver = new MutationObserver(() => {
 	const v = getVideo();

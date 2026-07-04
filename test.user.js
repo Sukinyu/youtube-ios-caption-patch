@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         MWeb Youtube Captions Patch (dev)
 // @author       Sukinyu
-// @version      54
+// @version      55
 // @match        https://m.youtube.com/*
 // @updateURL    https://github.com/Sukinyu/youtube-ios-caption-patch/raw/refs/heads/main/test.user.js
 // @downloadURL  https://github.com/Sukinyu/youtube-ios-caption-patch/raw/refs/heads/main/test.user.js
@@ -65,12 +65,14 @@
 
 // Start of debug code
 
+/** @type {(track: TextTrack) => TextTrackCue[]} */
 function getActiveCues(track) {
-	return [...(track.cues || [])];
+	return [...(track?.cues || [])];
 }
 function openEditor(cue) {
-	const editor = document.createElement("div");
-	editor.id = "cue-editor";
+	let editor = document.querySelector("#cue-editor");
+	if (!editor) editor = document.createElement("div", { is: "cue-editor" });
+	else editor.innerText = null;
 
 	Object.assign(editor.style, {
 		position: "fixed",
@@ -79,7 +81,7 @@ function openEditor(cue) {
 		width: "340px",
 		maxHeight: "60vh",
 		overflow: "auto",
-		background: "#111",
+		background: "#1111117d",
 		color: "white",
 		zIndex: 1000000,
 		padding: "10px",
@@ -273,9 +275,26 @@ function openEditor(cue) {
 
 	// --- Text editing ---
 	editor.appendChild(textEditor());
+	video.currentTime = cue.startTime;
 
 	document.body.appendChild(editor);
 }
+
+function formatTime(seconds) {
+	const hours = Math.floor(seconds / 3600);
+	const minutes = Math.floor(seconds / 60) % 60;
+	const secs = Math.floor(seconds) % 60;
+	const ms = Math.floor((seconds % 1) * 1000);
+
+	const pad2 = (n) => String(n).padStart(2, "0");
+	const pad3 = (n) => String(n).padStart(3, "0");
+
+	return (
+		(hours ? `${hours}:` : "") +
+		`${hours ? pad2(minutes) : minutes}:${pad2(secs)}.${pad3(ms)}`
+	);
+}
+
 function buildCueList(track) {
 	const panel = document.createElement("div");
 	panel.id = "cue-list-panel";
@@ -283,7 +302,7 @@ function buildCueList(track) {
         position:fixed;
         right:0;
         top:0;
-        width:300px;
+        width:max-content;
         max-height:100vh;
         overflow:auto;
         background:rgba(0,0,0,0.8);
@@ -296,7 +315,7 @@ function buildCueList(track) {
 
 	cues.forEach((cue, i) => {
 		const btn = document.createElement("button");
-		btn.textContent = `Cue ${i} [${cue.startTime.toFixed(1)}s]`;
+		btn.textContent = `Cue ${i} [${formatTime(cue.startTime)} - ${formatTime(cue.endTime)}]`;
 
 		btn.style.cssText = `
             display:block;
@@ -306,6 +325,8 @@ function buildCueList(track) {
         `;
 
 		btn.onclick = () => openEditor(cue);
+		cue.onenter = () => (btn.style.background = "rgba(230, 255, 75, 0.8)");
+		cue.onexit = () => btn.style.removeProperty("background");
 
 		panel.appendChild(btn);
 	});
@@ -316,11 +337,12 @@ function buildCueList(track) {
 // #End of debug code
 
 const injectedUrls = new Set();
-/** @type {HTMLVideoElement | null} */
-const video = document.querySelector("video");
+const getVideo = () => document.querySelector("video");
+var video = getVideo();
 const defaultFont =
 	'"YouTube Noto", Roboto, Arial, Helvetica, Verdana, "PT Sans Caption", sans-serif';
 const isMWEB = window.location.host.startsWith("m.");
+var track = null;
 
 function calculateBaseFontSize(videoWidth, videoHeight) {
 	let baseSize = (videoHeight / 360) * 16;
@@ -531,7 +553,7 @@ function setCaptionStyle(cssText) {
 /** @type {function(Json3Pen[]): string} */
 function generatePenStyles(pens) {
 	const fs = 89 * (0.75 + (pens[0].szPenSize ?? 100) / 400);
-	let style = `::cue(*) {\nfont-family: ${defaultFont};\nfont-size: ${fs}%;\nbackground: rgba(0,0,0,0.5);${isMWEB ? "\nfont-weight: 500;" : ""}\n}\n`;
+	let style = `::cue(c) {\nfont-family: ${defaultFont};\nfont-size: ${fs}%;\nbackground: rgba(0,0,0,0.5);${isMWEB ? "\nfont-weight: 500;" : ""}\n}\n`;
 	style += `.ytp-caption-window-container { width : 100%; !important}\n`;
 	//style += `::cue(:future) { opacity : 0; }\n`; Disabled due to people preferring the default behavior
 
@@ -617,7 +639,7 @@ function mapPosToCue(pos, pen, style) {
  * @param {Json3} json
  * @param {boolean} isAutoGen
  */
-function addCuesToTrack(track, json, isAutoGen) {
+function addCuesToTrack(json, isAutoGen) {
 	const events = json.events || [];
 	const pens = json.pens || [{}];
 	const wpWinPositions = json.wpWinPositions || [];
@@ -760,99 +782,6 @@ function addCuesToTrack(track, json, isAutoGen) {
 	toRemove.forEach((cue) => track.removeCue(cue));
 }
 
-// const po = new PerformanceObserver((list) => {
-// 	if (!window.location.pathname.startsWith("/watch")) return;
-// 	const entries = list.getEntries();
-// 	const url = entries[entries.length - 1].name;
-// 	if (!url.includes("/api/timedtext") || injectedUrls.has(url)) return;
-// 	injectedUrls.add(url);
-// 	console.log("Caption request detected:", url);
-// 	let newURL = new URL(url);
-// 	const removeParams = [
-// 		"potc",
-// 		"xorb",
-// 		"xobt",
-// 		"xovt",
-// 		"cbr",
-// 		"cbrver",
-// 		"cver",
-// 		"cplayer",
-// 		"cos",
-// 		"cosver",
-// 		"cplatform",
-// 	];
-// 	[...newURL.searchParams.keys()].forEach(
-// 		(key) => removeParams.includes(key) && newURL.searchParams.delete(key),
-// 	);
-// 	const userLang = navigator.language.split("-")[0] || "en"; // Use browser language or default to English
-// 	if (
-// 		!newURL.searchParams.has("lang", userLang) &&
-// 		!newURL.searchParams.has("tlang")
-// 	) {
-// 		newURL.searchParams.set("tlang", userLang);
-// 	}
-// 	const translated = newURL.searchParams.has("tlang");
-// 	const isAutoGen = newURL.searchParams.get("kind") === "asr";
-
-// 	function createTrack() {
-// 		let track =
-// 			video?.textTracks &&
-// 			[...(video?.textTracks || [])].find((t) =>
-// 				t.label.includes("Injected CC"),
-// 			);
-// 		if (!track) {
-// 			track = video.addTextTrack(
-// 				"captions",
-// 				`Injected CC${translated ? " (TS)" : ""}`,
-// 				userLang,
-// 			);
-// 			track.mode = "showing"; // debug so not hidden
-// 			console.log("Injected captions track");
-// 		} else {
-// 			if (track.cues) {
-// 				[...track.cues].forEach((cue) => track?.removeCue(cue)); // Clear existing cues
-// 			}
-// 		}
-// 		return track;
-// 	}
-
-// 	const tryFetch = (returnFormat) => {
-// 		newURL.searchParams.set("fmt", returnFormat);
-// 		injectedUrls.add(newURL.toString());
-// 		return fetch(newURL).then((r) => {
-// 			if (!r.ok) throw new Error(`HTTP ${r.status}`);
-// 			return r.text();
-// 		});
-// 	};
-
-// 	let track = createTrack();
-// 	tryFetch("json3")
-// 		.then((json) => addCuesToTrack(track, parseJson3(json), isAutoGen))
-// 		.catch((err) => alert(`Error adding captions: ${err}\n${err.stack}`));
-// });
-
-// po.observe({ type: "resource", buffered: true });
-
-if (video?.src) {
-	new MutationObserver(() => {
-		const track = video?.textTracks[0];
-		[...track.cues].forEach((cue) => track?.removeCue(cue));
-		if (track?.mode === "showing") {
-			track.mode = "hidden";
-			track.mode = "showing";
-		} // Refresh
-	}).observe(video, { attributeFilter: ["src"] });
-}
-
-/*
-video?.addEventListener("webkitbeginfullscreen", () => {
-	video?.textTracks[0] && (video.textTracks[0].mode = "showing");
-});
-video?.addEventListener("webkitendfullscreen", () => {
-	video?.textTracks[0] && (video.textTracks[0].mode = "hidden");
-});
-*/
-
 function createCaptionEditorButton(openEditor) {
 	const existing = document.getElementById("caption-editor-btn");
 	if (existing) return existing;
@@ -903,9 +832,8 @@ createCaptionEditorButton(() => {
 	const list = document.querySelector("#cue-list-panel");
 	const editor = document.querySelector("#cue-editor");
 	if (list || editor) {
-		editor.style.display = editor?.style.display === "none" ? "block" : "none";
+		list.style.display = list.style.display === "none" ? "block" : "none";
 	} else {
-		const track = video?.textTracks[0];
 		buildCueList(track);
 	}
 });
@@ -918,42 +846,115 @@ XMLHttpRequest.prototype.open = function (...args) {
 		const url = this.responseURL;
 		if (!url.includes("/api/timedtext") || injectedUrls.has(url)) return;
 		injectedUrls.add(url);
-		alert("Caption request detected:\n" + url); // For now, so I can view the url to verify it is fine for use
-		const _url = new URL(url);
+		console.log("Caption request detected:", url);
+		let newURL = new URL(url);
 		const userLang = navigator.language.split("-")[0] || "en"; // Use browser language or default to English
+		const isWantedLang = newURL.searchParams.get("lang")?.startsWith(userLang);
+		const isAutoGen = newURL.searchParams.get("kind") === "asr";
 
-		const translated = _url.searchParams.has("tlang");
-		const isAutoGen = _url.searchParams.get("kind") === "asr";
+		const removeParams = [
+			"potc",
+			"xorb",
+			"xobt",
+			"xovt",
+			"cbr",
+			"cbrver",
+			"cver",
+			"cplayer",
+			"cos",
+			"cosver",
+			"cplatform",
+		];
 
+		const tryFetch = (returnFormat) => {
+			newURL.searchParams.set("fmt", returnFormat);
+			injectedUrls.add(newURL.toString());
+			return fetch(newURL).then((r) => {
+				if (!r.ok) throw new Error(`HTTP ${r.status}`);
+				return r.text();
+			});
+		};
 		function createTrack() {
-			let track =
-				video?.textTracks &&
-				[...(video?.textTracks || [])].find((t) =>
-					t.label.includes("Injected CC"),
-				);
+			const language =
+				newURL.searchParams.get("tlang") ||
+				newURL.searchParams.get("lang") ||
+				userLang;
 			if (!track) {
 				track = video.addTextTrack(
 					"captions",
-					`Injected CC${translated ? " (TS)" : ""}`,
-					userLang,
+					`Injected CC${newURL.searchParams.has("tlang") ? " (TS)" : ""}`,
+					language,
 				);
 				track.mode = "showing"; // debug so not hidden
+				initVideo();
 				console.log("Injected captions track");
 			} else {
 				if (track.cues) {
 					[...track.cues].forEach((cue) => track?.removeCue(cue)); // Clear existing cues
+					
+					document.querySelector("#cue-list-panel")?.remove();
+					document.querySelector("#cue-editor")?.remove();
 				}
 			}
-			return track;
 		}
 
-		try {
-			let track = createTrack();
-			addCuesToTrack(track, parseJson3(this.responseText), isAutoGen);
-		} catch (err) {
-			alert(`Error adding captions: ${err}\n${err.stack}`);
+		if (!isWantedLang && !newURL.searchParams.has("tlang")) {
+			[...newURL.searchParams.keys()].forEach(
+				(key) => removeParams.includes(key) && newURL.searchParams.delete(key),
+			);
+			newURL.searchParams.set("tlang", userLang);
+
+			createTrack();
+			tryFetch("json3")
+				.then((json) => addCuesToTrack(parseJson3(json), isAutoGen))
+				.catch((err) => alert(`Error adding captions: ${err}\n${err.stack}`));
+		} else {
+			createTrack();
+			addCuesToTrack(parseJson3(this.responseText), isAutoGen);
 		}
 	});
-
 	return origOpen.apply(this, args);
 };
+
+function initVideo() {
+	console.log("Video caption handlers initialized");
+
+	// fullscreen hooks
+	video.addEventListener("webkitbeginfullscreen", () => {
+		track && (track.mode = "showing");
+	});
+
+	video.addEventListener("webkitendfullscreen", () => {
+		track && (track.mode = "hidden");
+	});
+
+	new MutationObserver(() => {
+		if (!track.cues.length) return;
+		[...track.cues].forEach((cue) => track?.removeCue(cue));
+		if (track?.mode === "showing") {
+			track.mode = "hidden";
+			track.mode = "showing";
+		} // Refresh
+		document.querySelector("#cue-list-panel")?.remove();
+		document.querySelector("#cue-editor")?.remove();
+		console.log("Cleared cues");
+	}).observe(video, { attributeFilter: ["src"] });
+}
+
+const videoObserver = new MutationObserver(() => {
+	const v = getVideo();
+	if (!v || v.textTracks[0]) return;
+
+	// only re-init if track missing or new video detected
+	if (!window.video || window.video !== v) return;
+	window.video = v;
+	const _track = video?.addTextTrack(track.kind, track.label, track.language);
+	_track.mode = track.mode;
+	[...track.cues].forEach((cue) => _track.addCue(cue));
+	track = _track;
+
+	initVideo();
+});
+videoObserver.observe(document.querySelector("div.html5-video-container"), {
+	childList: true,
+});
