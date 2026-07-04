@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         MWeb Youtube Captions Patch (beta)
 // @author       Sukinyu
-// @version      1.2.3
-// @last         6/30/2026 (mm/dd/yyyy)
+// @version      1.2.4
+// @last         7/4/2026 (mm/dd/yyyy)
 // @description  Fix captions on youtube videos in webkit fullscreen mode on iOS (https://m.youtube.com/).
 // @match        https://m.youtube.com/*
 // @updateURL    https://github.com/Sukinyu/youtube-ios-caption-patch/raw/refs/heads/main/beta.user.js
@@ -10,7 +10,7 @@
 // ==/UserScript==
 
 const injectedUrls = new Set();
-const getVideo = () => document.querySelector("video");
+const getVideo = () => document.querySelectorAll("video").at(-1);
 var video = getVideo();
 const defaultFont =
 	'"YouTube Noto", Roboto, Arial, Helvetica, Verdana, "PT Sans Caption", sans-serif';
@@ -308,9 +308,11 @@ function addCuesToTrack(json, isAutoGen) {
 	const wpWinPositions = json.wpWinPositions || [];
 	const wsWinStyles = json.wsWinStyles || [];
 
+/*
 	// Best solution I can think of rn
 	// TODO: Find a better solution
 	isAutoGen && isMWEB && (pens[0].szPenSize ??= 200);
+	*/
 
 	// ---------- build CSS from pens + positions ----------
 	setCaptionStyle(generatePenStyles(pens));
