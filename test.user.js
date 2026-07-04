@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         MWeb Youtube Captions Patch (dev)
 // @author       Sukinyu
-// @version      55
+// @version      56
 // @match        https://m.youtube.com/*
 // @updateURL    https://github.com/Sukinyu/youtube-ios-caption-patch/raw/refs/heads/main/test.user.js
 // @downloadURL  https://github.com/Sukinyu/youtube-ios-caption-patch/raw/refs/heads/main/test.user.js
@@ -71,8 +71,9 @@ function getActiveCues(track) {
 }
 function openEditor(cue) {
 	let editor = document.querySelector("#cue-editor");
-	if (!editor) editor = document.createElement("div", { is: "cue-editor" });
-	else editor.innerText = null;
+	if (!editor) {
+		editor = document.createElement("div", { is: "cue-editor" });
+	} else editor.innerText = "";
 
 	Object.assign(editor.style, {
 		position: "fixed",
@@ -891,7 +892,7 @@ XMLHttpRequest.prototype.open = function (...args) {
 			} else {
 				if (track.cues) {
 					[...track.cues].forEach((cue) => track?.removeCue(cue)); // Clear existing cues
-					
+
 					document.querySelector("#cue-list-panel")?.remove();
 					document.querySelector("#cue-editor")?.remove();
 				}
