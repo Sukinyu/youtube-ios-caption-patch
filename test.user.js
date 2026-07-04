@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         MWeb Youtube Captions Patch (dev)
 // @author       Sukinyu
-// @version      53
+// @version      54
 // @match        https://m.youtube.com/*
 // @updateURL    https://github.com/Sukinyu/youtube-ios-caption-patch/raw/refs/heads/main/test.user.js
 // @downloadURL  https://github.com/Sukinyu/youtube-ios-caption-patch/raw/refs/heads/main/test.user.js
@@ -622,10 +622,6 @@ function addCuesToTrack(track, json, isAutoGen) {
 	const pens = json.pens || [{}];
 	const wpWinPositions = json.wpWinPositions || [];
 	const wsWinStyles = json.wsWinStyles || [];
-
-	// Best solution I can think of rn
-	// TODO: Find a better solution
-	isAutoGen && isMWEB && (pens[0].szPenSize ??= 200);
 
 	// ---------- build CSS from pens + positions ----------
 	setCaptionStyle(generatePenStyles(pens));
