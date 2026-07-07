@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         MWeb Youtube Captions Patch (beta)
 // @author       Sukinyu
-// @version      1.2.8
+// @version      1.2.9
 // @last         7/6/2026 (mm/dd/yyyy)
 // @description  Fix captions on youtube videos in webkit fullscreen mode on iOS (https://m.youtube.com/).
 // @match        https://m.youtube.com/*
@@ -9,13 +9,26 @@
 // @downloadURL  https://github.com/Sukinyu/youtube-ios-caption-patch/raw/refs/heads/main/beta.user.js
 // ==/UserScript==
 
-const injectedUrls = new Set();
+const seen = new Set();
 const getVideo = () => document.querySelector("video");
-var video = getVideo();
 const defaultFont =
 	'"YouTube Noto", Roboto, Arial, Helvetica, Verdana, "PT Sans Caption", sans-serif';
 const isMWEB = window.location.host.startsWith("m.");
-var track = null;
+const removeParams = [
+	"potc",
+	"xorb",
+	"xobt",
+	"xovt",
+	"cbr",
+	"cbrver",
+	"cver",
+	"cplayer",
+	"cos",
+	"cosver",
+	"cplatform",
+];
+let video = getVideo();
+let track = null;
 
 function calculateBaseFontSize(videoWidth, videoHeight) {
 	let baseSize = (videoHeight / 360) * 16;
@@ -39,7 +52,6 @@ function ts(ms, format = false) {
 }
 
 const rgb = (num) => `${(num >> 16) & 255},${(num >> 8) & 255},${num & 255}`;
-
 const rd = (num, decimals = 4) => +num.toFixed(decimals);
 
 function penFontFamily(pen) {
@@ -74,6 +86,9 @@ const parseJson3 = (json) => {
 		);
 	}
 };
+
+const toKeyString = (p) =>
+	`${p.get("v")}|${p.get("lang")}|${p.get("tlang") ?? "  "}|${p.get("kind") ?? " "}`;
 
 function getVideoSize(video) {
 	if (!video) return { width: 0, height: 0 };
@@ -213,8 +228,7 @@ function penToCss(pen, fs) {
 function setCaptionStyle(cssText) {
 	let styleEl = document.getElementById("vtt-style");
 	if (!styleEl) {
-		styleEl = document.createElement("style");
-		styleEl.id = "vtt-style";
+		styleEl = document.createElement("style", { is: "vtt-style" });
 		document.head.appendChild(styleEl);
 	}
 	styleEl.textContent = cssText;
@@ -449,47 +463,33 @@ const origOpen = XMLHttpRequest.prototype.open;
 
 XMLHttpRequest.prototype.open = function (...args) {
 	this.addEventListener("load", () => {
-		if (!window.location.pathname.startsWith("/watch")) return;
-		const url = this.responseURL;
-		if (!url.includes("/api/timedtext") || injectedUrls.has(url)) return;
-		injectedUrls.add(url);
-		console.log("Caption request detected:", url);
-		let newURL = new URL(url);
+		if (!window.location.pathname.startsWith("/watch") || this.status != 200)
+			return;
+		const url = new URL(this.responseURL);
+		if (url.pathname != "/api/timedtext") return;
+		const p = url.searchParams;
+		const keyString = toKeyString(p);
+		if (seen.has(keyString)) return;
+		seen.add(keyString);
+		console.log("Caption request detected:", keyString);
 		const userLang = navigator.language.split("-")[0] || "en"; // Use browser language or default to English
-		const isWantedLang = newURL.searchParams.get("lang")?.startsWith(userLang);
-		const isAutoGen = newURL.searchParams.get("kind") === "asr";
-
-		const removeParams = [
-			"potc",
-			"xorb",
-			"xobt",
-			"xovt",
-			"cbr",
-			"cbrver",
-			"cver",
-			"cplayer",
-			"cos",
-			"cosver",
-			"cplatform",
-		];
+		const isWantedLang = p.get("lang")?.startsWith(userLang);
+		const isAutoGen = p.get("kind") === "asr";
 
 		const tryFetch = (returnFormat) => {
-			newURL.searchParams.set("fmt", returnFormat);
-			injectedUrls.add(newURL.toString());
-			return fetch(newURL).then((r) => {
+			p.set("fmt", returnFormat);
+			return fetch(url.href).then((r) => {
 				if (!r.ok) throw new Error(`HTTP ${r.status}`);
+				seen.add(toKeyString(p));
 				return r.text();
 			});
 		};
 		function createTrack() {
-			const language =
-				newURL.searchParams.get("tlang") ||
-				newURL.searchParams.get("lang") ||
-				userLang;
+			const language = p.get("tlang") || p.get("lang") || userLang;
 			if (!track) {
 				track = video.addTextTrack(
 					"captions",
-					`Injected CC${newURL.searchParams.has("tlang") ? " (TS)" : ""}`,
+					`Injected CC${p.has("tlang") ? " (TS)" : ""}`,
 					language,
 				);
 				track.mode = "hidden";
@@ -502,11 +502,11 @@ XMLHttpRequest.prototype.open = function (...args) {
 			}
 		}
 
-		if (!isWantedLang && !newURL.searchParams.has("tlang")) {
-			[...newURL.searchParams.keys()].forEach(
-				(key) => removeParams.includes(key) && newURL.searchParams.delete(key),
+		if (!isWantedLang && !p.has("tlang")) {
+			[...p.keys()].forEach(
+				(key) => removeParams.includes(key) && p.delete(key),
 			);
-			newURL.searchParams.set("tlang", userLang);
+			p.set("tlang", userLang);
 
 			createTrack();
 			tryFetch("json3")
@@ -534,28 +534,34 @@ function initVideo() {
 
 	new MutationObserver(() => {
 		if (!track.cues.length) return;
+		seen.clear();
 		[...track.cues].forEach((cue) => track?.removeCue(cue));
 		if (track?.mode === "showing") {
 			track.mode = "hidden";
 			track.mode = "showing";
 		} // Refresh
-		console.log("Cleared cues");
+		console.log("Video source changed, cues cleared");
 	}).observe(video, { attributeFilter: ["src"] });
 }
 
 const videoObserver = new MutationObserver(() => {
-	const v = getVideo();
-	if (!v || v.textTracks[0]) return;
+	try {
+		const v = getVideo();
+		if (!v || v.textTracks[0]) return;
 
-	// only re-init if track missing or new video detected
-	if (!window.video || window.video === v) return;
-	window.video = v;
-	const _track = video?.addTextTrack(track.kind, track.label, track.language);
-	_track.mode = track.mode;
-	[...track.cues].forEach((cue) => _track.addCue(cue));
-	track = _track;
+		// only re-init if track missing or new video detected
+		if (!video || video === v) return;
+		console.log("Video Element changed");
+		video = v;
+		const _track = video?.addTextTrack(track.kind, track.label, track.language);
+		_track.mode = track.mode;
+		[...track.cues].forEach((cue) => _track.addCue(cue));
+		track = _track;
 
-	initVideo();
+		initVideo();
+	} catch (err) {
+		alert(`videoObserver err:\n${err}\n${err.stack}`);
+	}
 });
 videoObserver.observe(document.querySelector("div.html5-video-container"), {
 	childList: true,
