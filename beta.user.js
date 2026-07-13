@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         MWeb Youtube Captions Patch (beta)
 // @author       Sukinyu
-// @version      1.2.9
+// @version      1.2.10
 // @last         7/6/2026 (mm/dd/yyyy)
 // @description  Fix captions on youtube videos in webkit fullscreen mode on iOS (https://m.youtube.com/).
 // @match        https://m.youtube.com/*
@@ -469,7 +469,7 @@ XMLHttpRequest.prototype.open = function (...args) {
 		if (url.pathname != "/api/timedtext") return;
 		const p = url.searchParams;
 		const keyString = toKeyString(p);
-		if (seen.has(keyString)) return;
+		if (seen.has(keyString) && track) return;
 		seen.add(keyString);
 		console.log("Caption request detected:", keyString);
 		const userLang = navigator.language.split("-")[0] || "en"; // Use browser language or default to English
@@ -484,6 +484,9 @@ XMLHttpRequest.prototype.open = function (...args) {
 				return r.text();
 			});
 		};
+
+		video !== getVideo() && (video = getVideo());
+
 		function createTrack() {
 			const language = p.get("tlang") || p.get("lang") || userLang;
 			if (!track) {
@@ -543,26 +546,3 @@ function initVideo() {
 		console.log("Video source changed, cues cleared");
 	}).observe(video, { attributeFilter: ["src"] });
 }
-
-const videoObserver = new MutationObserver(() => {
-	try {
-		const v = getVideo();
-		if (!v || v.textTracks[0]) return;
-
-		// only re-init if track missing or new video detected
-		if (!video || video === v) return;
-		console.log("Video Element changed");
-		video = v;
-		const _track = video?.addTextTrack(track.kind, track.label, track.language);
-		_track.mode = track.mode;
-		[...track.cues].forEach((cue) => _track.addCue(cue));
-		track = _track;
-
-		initVideo();
-	} catch (err) {
-		alert(`videoObserver err:\n${err}\n${err.stack}`);
-	}
-});
-videoObserver.observe(document.querySelector("div.html5-video-container"), {
-	childList: true,
-});
