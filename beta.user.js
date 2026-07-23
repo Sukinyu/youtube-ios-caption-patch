@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         MWeb Youtube Captions Patch (beta)
 // @author       Sukinyu
-// @version      1.2.11
-// @last         7/14/2026 (mm/dd/yyyy)
+// @version      1.2.12
+// @last         7/23/2026 (mm/dd/yyyy)
 // @description  Fix captions on youtube videos in webkit fullscreen mode on iOS (https://m.youtube.com/).
 // @match        https://m.youtube.com/*
 // @updateURL    https://github.com/Sukinyu/youtube-ios-caption-patch/raw/refs/heads/main/beta.user.js
@@ -183,7 +183,7 @@ function penToCss(pen, fs) {
 				// Blur/drop shadow
 				for (let blur = w; blur <= Math.max(5 * scale, 1); blur += scale) {
 					shadows.push(
-						`max(0.09375em,1px) max(0.09375em,1px) ${toEm(blur)} ${darkShadow}`,
+						`max(0.0625em,1px) max(0.0625em,1px) ${0.03125 * blur / scale}em ${darkShadow}`,
 					);
 				}
 				break;
