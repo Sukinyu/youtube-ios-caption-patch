@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         MWeb Youtube Captions Patch (dev)
 // @author       Sukinyu
-// @version      58
+// @version      59
 // @match        https://m.youtube.com/*
 // @updateURL    https://github.com/Sukinyu/youtube-ios-caption-patch/raw/refs/heads/main/test.user.js
 // @downloadURL  https://github.com/Sukinyu/youtube-ios-caption-patch/raw/refs/heads/main/test.user.js
@@ -72,7 +72,7 @@ function getActiveCues(track) {
 function openEditor(cue) {
 	let editor = document.querySelector("#cue-editor");
 	if (!editor) {
-		editor = document.createElement("div", { is: "cue-editor" });
+		editor = Object.assign(document.createElement("div"), { id: "cue-editor" });
 	} else editor.innerText = "";
 
 	Object.assign(editor.style, {
@@ -297,7 +297,7 @@ function formatTime(seconds) {
 }
 
 function buildCueList(track) {
-	const panel = document.createElement("div", { is: "cue-list-panel" });
+	const panel = Object.assign(document.createElement("div"), { id: "cue-list-panel" });
 	panel.style.cssText = `
         position:fixed;
         right:0;
@@ -518,7 +518,7 @@ function penToCss(pen, fs) {
 				// Blur/drop shadow
 				for (let blur = w; blur <= Math.max(5 * scale, 1); blur += scale) {
 					shadows.push(
-						`max(0.09375em,1px) max(0.09375em,1px) ${toEm(blur)} ${darkShadow}`,
+						`max(0.0625em,1px) max(0.0625em,1px) ${0.03125 * blur / scale}em ${darkShadow}`,
 					);
 				}
 				break;
@@ -563,7 +563,7 @@ function penToCss(pen, fs) {
 function setCaptionStyle(cssText) {
 	let styleEl = document.getElementById("vtt-style");
 	if (!styleEl) {
-		styleEl = document.createElement("style", { is: "vtt-style" });
+		styleEl = Object.assign(document.createElement("style"), { id: "vtt-style" });
 		document.head.appendChild(styleEl);
 	}
 	styleEl.textContent = cssText;
@@ -865,7 +865,8 @@ XMLHttpRequest.prototype.open = function (...args) {
 		if (url.pathname != "/api/timedtext") return;
 		const p = url.searchParams;
 		const keyString = toKeyString(p);
-		if (seen.has(keyString)) return;
+		const v = getVideo();
+		if (seen.has(keyString) && v?.textTracks[0]) return;
 		seen.add(keyString);
 		console.log("Caption request detected:", keyString);
 		const userLang = navigator.language.split("-")[0] || "en"; // Use browser language or default to English
@@ -880,6 +881,12 @@ XMLHttpRequest.prototype.open = function (...args) {
 				return r.text();
 			});
 		};
+
+		if (video !== v) { // Update video reference if changed
+			video = v;
+			track = null; // Reset track for new video
+		};
+
 		function createTrack() {
 			const language = p.get("tlang") || p.get("lang") || userLang;
 			if (!track) {
@@ -944,26 +951,3 @@ function initVideo() {
 		console.log("Video source changed, cues cleared");
 	}).observe(video, { attributeFilter: ["src"] });
 }
-
-const videoObserver = new MutationObserver(() => {
-	try {
-		const v = getVideo();
-		if (!v || v.textTracks[0]) return;
-
-		// only re-init if track missing or new video detected
-		if (!video || video === v) return;
-		console.log("Video Element changed");
-		video = v;
-		const _track = video?.addTextTrack(track.kind, track.label, track.language);
-		_track.mode = track.mode;
-		[...track.cues].forEach((cue) => _track.addCue(cue));
-		track = _track;
-
-		initVideo();
-	} catch (err) {
-		alert(`videoObserver err:\n${err}\n${err.stack}`);
-	}
-});
-videoObserver.observe(document.querySelector("div.html5-video-container"), {
-	childList: true,
-});

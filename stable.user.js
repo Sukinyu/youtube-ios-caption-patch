@@ -1,19 +1,34 @@
 // ==UserScript==
 // @name         MWeb Youtube Captions Patch (stable)
 // @author       Sukinyu
-// @version      1.2.0
-// @last         6/25/2026 (mm/dd/yyyy)
+// @version      1.2.13
+// @last         7/23/2026 (mm/dd/yyyy)
 // @description  Fix captions on youtube videos in webkit fullscreen mode on iOS (https://m.youtube.com/).
 // @match        https://m.youtube.com/*
 // @updateURL    https://github.com/Sukinyu/youtube-ios-caption-patch/raw/refs/heads/main/stable.user.js
 // @downloadURL  https://github.com/Sukinyu/youtube-ios-caption-patch/raw/refs/heads/main/stable.user.js
 // ==/UserScript==
 
-const injectedUrls = new Set();
-const video = document.querySelector("video");
+const seen = new Set();
+const getVideo = () => document.querySelector("video");
 const defaultFont =
 	'"YouTube Noto", Roboto, Arial, Helvetica, Verdana, "PT Sans Caption", sans-serif';
 const isMWEB = window.location.host.startsWith("m.");
+const removeParams = [
+	"potc",
+	"xorb",
+	"xobt",
+	"xovt",
+	"cbr",
+	"cbrver",
+	"cver",
+	"cplayer",
+	"cos",
+	"cosver",
+	"cplatform",
+];
+let video = getVideo();
+let track = null;
 
 function calculateBaseFontSize(videoWidth, videoHeight) {
 	let baseSize = (videoHeight / 360) * 16;
@@ -37,7 +52,6 @@ function ts(ms, format = false) {
 }
 
 const rgb = (num) => `${(num >> 16) & 255},${(num >> 8) & 255},${num & 255}`;
-
 const rd = (num, decimals = 4) => +num.toFixed(decimals);
 
 function penFontFamily(pen) {
@@ -72,6 +86,9 @@ const parseJson3 = (json) => {
 		);
 	}
 };
+
+const toKeyString = (p) =>
+	`${p.get("v")}|${p.get("lang")}|${p.get("tlang") ?? "  "}|${p.get("kind") ?? " "}`;
 
 function getVideoSize(video) {
 	if (!video) return { width: 0, height: 0 };
@@ -166,7 +183,7 @@ function penToCss(pen, fs) {
 				// Blur/drop shadow
 				for (let blur = w; blur <= Math.max(5 * scale, 1); blur += scale) {
 					shadows.push(
-						`max(0.09375em,1px) max(0.09375em,1px) ${toEm(blur)} ${darkShadow}`,
+						`max(0.0625em,1px) max(0.0625em,1px) ${0.03125 * blur / scale}em ${darkShadow}`,
 					);
 				}
 				break;
@@ -211,8 +228,7 @@ function penToCss(pen, fs) {
 function setCaptionStyle(cssText) {
 	let styleEl = document.getElementById("vtt-style");
 	if (!styleEl) {
-		styleEl = document.createElement("style");
-		styleEl.id = "vtt-style";
+		styleEl = Object.assign(document.createElement("style"), { id: "vtt-style" });
 		document.head.appendChild(styleEl);
 	}
 	styleEl.textContent = cssText;
@@ -220,7 +236,7 @@ function setCaptionStyle(cssText) {
 
 function generatePenStyles(pens) {
 	const fs = 89 * (0.75 + (pens[0].szPenSize ?? 100) / 400);
-	let style = `::cue(c) {\nfont-family: ${defaultFont};\nfont-size: ${fs}%;\nbackground: rgba(0,0,0,0.65);${isMWEB ? "\nfont-weight: 500;" : ""}\n}\n`;
+	let style = `::cue(c) {\nfont-family: ${defaultFont};\nfont-size: ${fs}%;\nbackground: rgba(0,0,0,0.5);${isMWEB ? "\nfont-weight: 500;" : ""}\n}\n`;
 	style += `.ytp-caption-window-container { width : 100%; !important}\n`;
 	//style += `::cue(:future) { opacity : 0; }\n`; Disabled due to people preferring the default behavior
 
@@ -238,7 +254,7 @@ function generatePenStyles(pens) {
 const LEFT_ANCHORS = new Set([0, 3, 6]);
 const RIGHT_ANCHORS = new Set([2, 5, 8]);
 
-function mapPosToCue(pos, pen, style) {
+function mapPosToCue(pos, pen, style, isAutoGen) {
 	pos || (pos = { avVerPos: 100, ahHorPos: 50, apPoint: 7 });
 
 	const anchorPoint = pos.apPoint;
@@ -248,7 +264,9 @@ function mapPosToCue(pos, pen, style) {
 	let ver = isMWEB ? verPos * 0.92 + 2 : verPos * 0.96 + 2;
 	let hor = (pos.ahHorPos ?? 50) * 0.96 + 2;
 
-	const fontSizeIncrement = pen?.szPenSize ? pen.szPenSize / 100 - 1 : 0;
+	const fontSizeIncrement =
+		(pen?.szPenSize ? pen.szPenSize / 100 - 1 : 0) +
+		(isAutoGen && isMWEB ? 1 : 0);
 	if (hasAnchor && LEFT_ANCHORS.has(anchorPoint)) {
 		hor = Math.max(hor / (1 + fontSizeIncrement * 2), 2);
 	}
@@ -300,15 +318,11 @@ function mapPosToCue(pos, pen, style) {
 	};
 }
 
-function addCuesToTrack(track, json, isAutoGen) {
+function addCuesToTrack(json, isAutoGen) {
 	const events = json.events || [];
 	const pens = json.pens || [{}];
 	const wpWinPositions = json.wpWinPositions || [];
 	const wsWinStyles = json.wsWinStyles || [];
-
-	// Best solution I can think of rn
-	// TODO: Find a better solution
-	isAutoGen && isMWEB && (pens[0].szPenSize ??= 200);
 
 	// ---------- build CSS from pens + positions ----------
 	setCaptionStyle(generatePenStyles(pens));
@@ -374,7 +388,7 @@ function addCuesToTrack(track, json, isAutoGen) {
 		const pos = wpWinPositions[ev.wpWinPosId ?? -1],
 			eventPen = pens[ev.pPenId ?? 0],
 			eventStyle = wsWinStyles[ev.wsWinStyleId ?? -1];
-		const placement = mapPosToCue(pos, eventPen, eventStyle);
+		const placement = mapPosToCue(pos, eventPen, eventStyle, isAutoGen);
 
 		cue.line = placement.line;
 		if (placement.position != null) cue.position = rd(placement.position, 2);
@@ -449,97 +463,90 @@ const origOpen = XMLHttpRequest.prototype.open;
 
 XMLHttpRequest.prototype.open = function (...args) {
 	this.addEventListener("load", () => {
-	if (!window.location.pathname.startsWith("/watch")) return;
-		const url = this.responseURL;
-	if (!url.includes("/api/timedtext") || injectedUrls.has(url)) return;
-	injectedUrls.add(url);
-	console.log("Caption request detected:", url);
-	let newURL = new URL(url);
+		if (!window.location.pathname.startsWith("/watch") || this.status != 200)
+			return;
+		const url = new URL(this.responseURL);
+		if (url.pathname != "/api/timedtext") return;
+		const p = url.searchParams;
+		const keyString = toKeyString(p);
+		const v = getVideo();
+		if (seen.has(keyString) && v?.textTracks[0]) return;
+		seen.add(keyString);
+		console.log("Caption request detected:", keyString);
 		const userLang = navigator.language.split("-")[0] || "en"; // Use browser language or default to English
-		const isWantedLang = newURL.searchParams.get("lang")?.startsWith(userLang);
-		const isAutoGen = newURL.searchParams.get("kind") === "asr";
-
-	const removeParams = [
-		"potc",
-		"xorb",
-		"xobt",
-		"xovt",
-		"cbr",
-		"cbrver",
-		"cver",
-		"cplayer",
-		"cos",
-		"cosver",
-		"cplatform",
-	];
+		const isWantedLang = p.get("lang")?.startsWith(userLang);
+		const isAutoGen = p.get("kind") === "asr";
 
 		const tryFetch = (returnFormat) => {
-			newURL.searchParams.set("fmt", returnFormat);
-			injectedUrls.add(newURL.toString());
-			return fetch(newURL).then((r) => {
+			p.set("fmt", returnFormat);
+			return fetch(url.href).then((r) => {
 				if (!r.ok) throw new Error(`HTTP ${r.status}`);
+				seen.add(toKeyString(p));
 				return r.text();
 			});
 		};
 
-	function createTrack() {
-		let track =
-			video?.textTracks &&
-			[...(video?.textTracks || [])].find((t) =>
-					t.label.startsWith("Injected CC"),
-			);
-			const language =
-				newURL.searchParams.get("tlang") ||
-				newURL.searchParams.get("lang") ||
-				userLang;
-		if (!track) {
-			track = video.addTextTrack(
-				"captions",
-					`Injected CC${newURL.searchParams.has("tlang") ? " (TS)" : ""}`,
+		if (video !== v) { // Update video reference if changed
+			video = v;
+			track = null; // Reset track for new video
+		};
+
+		function createTrack() {
+			const language = p.get("tlang") || p.get("lang") || userLang;
+			if (!track) {
+				track = video.addTextTrack(
+					"captions",
+					`Injected CC${p.has("tlang") ? " (TS)" : ""}`,
 					language,
-			);
+				);
 				track.mode = "hidden";
-			console.log("Injected captions track");
-		} else {
-			if (track.cues) {
-				[...track.cues].forEach((cue) => track?.removeCue(cue)); // Clear existing cues
+				initVideo();
+				console.log("Injected captions track");
+			} else {
+				if (track.cues) {
+					[...track.cues].forEach((cue) => track?.removeCue(cue)); // Clear existing cues
+				}
 			}
 		}
-		return track;
-	}
 
-		if (!isWantedLang && !newURL.searchParams.has("tlang")) {
-			[...newURL.searchParams.keys()].forEach(
-				(key) => removeParams.includes(key) && newURL.searchParams.delete(key),
+		if (!isWantedLang && !p.has("tlang")) {
+			[...p.keys()].forEach(
+				(key) => removeParams.includes(key) && p.delete(key),
 			);
-			newURL.searchParams.set("tlang", userLang);
+			p.set("tlang", userLang);
 
-			const track = createTrack();
-		tryFetch("json3")
-		.then((json) => addCuesToTrack(track, parseJson3(json), isAutoGen))
-			.catch((err) => alert(`Error adding captions: ${err}\n${err.stack}`));
+			createTrack();
+			tryFetch("json3")
+				.then((json) => addCuesToTrack(parseJson3(json), isAutoGen))
+				.catch((err) => alert(`Error adding captions: ${err}\n${err.stack}`));
 		} else {
-			const track = createTrack();
-			addCuesToTrack(track, parseJson3(this.responseText), isAutoGen);
+			createTrack();
+			addCuesToTrack(parseJson3(this.responseText), isAutoGen);
 		}
-});
+	});
 	return origOpen.apply(this, args);
 };
 
-if (video?.src) {
+function initVideo() {
+	console.log("Video caption handlers initialized");
+
+	// fullscreen hooks
+	video.addEventListener("webkitbeginfullscreen", () => {
+		track && (track.mode = "showing");
+	});
+
+	video.addEventListener("webkitendfullscreen", () => {
+		track && (track.mode = "hidden");
+	});
+
 	new MutationObserver(() => {
-		const track = video?.textTracks[0];
+		if (!track.cues.length) return;
+		seen.clear();
 		[...track.cues].forEach((cue) => track?.removeCue(cue));
 		if (track?.mode === "showing") {
 			track.mode = "hidden";
 			track.mode = "showing";
 		} // Refresh
+		console.log("Video source changed, cues cleared");
 	}).observe(video, { attributeFilter: ["src"] });
 }
-
-video?.addEventListener("webkitbeginfullscreen", () => {
-	video?.textTracks[0] && (video.textTracks[0].mode = "showing");
-});
-video?.addEventListener("webkitendfullscreen", () => {
-	video?.textTracks[0] && (video.textTracks[0].mode = "hidden");
-});
