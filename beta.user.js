@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         MWeb Youtube Captions Patch (beta)
 // @author       Sukinyu
-// @version      1.2.13
-// @last         7/23/2026 (mm/dd/yyyy)
+// @version      1.2.14
+// @last         10/11/2026 (mm/dd/yyyy)
 // @description  Fix captions on youtube videos in webkit fullscreen mode on iOS (https://m.youtube.com/).
 // @match        https://m.youtube.com/*
 // @updateURL    https://github.com/Sukinyu/youtube-ios-caption-patch/raw/refs/heads/main/beta.user.js
@@ -485,21 +485,21 @@ XMLHttpRequest.prototype.open = function (...args) {
 				return r.text();
 			});
 		};
-
+/*
 		if (video !== v) { // Update video reference if changed
 			video = v;
 			track = null; // Reset track for new video
 		};
-
+*/
 		function createTrack() {
 			const language = p.get("tlang") || p.get("lang") || userLang;
 			if (!track) {
-				track = video.addTextTrack(
+				track = video.textTracks[0] || video.addTextTrack(
 					"captions",
 					`Injected CC${p.has("tlang") ? " (TS)" : ""}`,
 					language,
 				);
-				track.mode = "hidden";
+				//track.mode = "hidden";
 				initVideo();
 				console.log("Injected captions track");
 			} else {
@@ -529,7 +529,7 @@ XMLHttpRequest.prototype.open = function (...args) {
 
 function initVideo() {
 	console.log("Video caption handlers initialized");
-
+/*
 	// fullscreen hooks
 	video.addEventListener("webkitbeginfullscreen", () => {
 		track && (track.mode = "showing");
@@ -550,3 +550,4 @@ function initVideo() {
 		console.log("Video source changed, cues cleared");
 	}).observe(video, { attributeFilter: ["src"] });
 }
+*/
