@@ -1,71 +1,14 @@
 // ==UserScript==
 // @name         MWeb Youtube Captions Patch (dev)
 // @author       Sukinyu
-// @version      59
+// @version      60
 // @match        https://m.youtube.com/*
 // @updateURL    https://github.com/Sukinyu/youtube-ios-caption-patch/raw/refs/heads/main/test.user.js
 // @downloadURL  https://github.com/Sukinyu/youtube-ios-caption-patch/raw/refs/heads/main/test.user.js
 // ==/UserScript==
-/**
- * @typedef {Object} Json3Seg
- * @prop {string} utf8
- * @prop {number} [tOffsetMs]
- * @prop {number} [pPenId]
- */
-/**
- * @typedef {Object} Json3Event
- * @prop {number} tStartMs
- * @prop {number} dDurationMs
- * @prop {Json3Seg[]} segs
- * @prop {number} [wpWinPosId]
- * @prop {number} [wsWinStyleId]
- * @prop {number} [pPenId]
- * @prop {number} [id]
- * @prop {number} [wWinId]
- * @prop {0 | 1} [aAppend]
- */
-/**
- * @typedef {Object} Json3Pen
- * @prop {0 | 1 | 2} [ofOffset]
- * @prop {number} [fcForeColor]
- * @prop {number} [foForeAlpha]
- * @prop {number} [bcBackColor]
- * @prop {number} [boBackAlpha]
- * @prop {number} [etEdgeType]
- * @prop {number} [ecEdgeColor]
- * @prop {number} [szPenSize]
- * @prop {number} [fsFontStyle]
- * @prop {0 | 1} [bAttr]
- * @prop {0 | 1} [iAttr]
- * @prop {0 | 1} [uAttr]
- * @prop {number} [hgHorizGroup]
- */
-/**
- * @typedef {Object} Json3WinPos
- * @prop {0|1|2|3|4|5|6|7|8} apPoint
- * @prop {number} [ahHorPos]
- * @prop {number} [avVerPos]
- * @prop {number} [ccCols]
- * @prop {number} [rcRows]
- */
-/**
- * @typedef {Object} Json3WinStyle
- * @prop {number} [mhModeHint]
- * @prop {0 | 1 | 2} [juJustifCode]
- * @prop {number} [pdPrintDir]
- * @prop {number} [sdScrollDir]
- */
-/**
- * @typedef {Object} Json3
- * @prop {Json3Event[]} events
- * @prop {Json3Pen[]} [pens]
- * @prop {Json3WinPos[]} wpWinPositions
- * @prop {Json3WinStyle[]} wsWinStyles
- */
-
 // Start of debug code
 
-/** @type {(track: TextTrack) => TextTrackCue[]} */
+/** @arg {TextTrack} track */
 function getActiveCues(track) {
 	return [...(track?.cues || [])];
 }
@@ -73,9 +16,9 @@ function openEditor(cue) {
 	let editor = document.querySelector("#cue-editor");
 	if (!editor) {
 		editor = Object.assign(document.createElement("div"), { id: "cue-editor" });
-	} else editor.innerText = "";
+	} else editor.textContent = "";
 
-	Object.assign(editor.style, {
+	Object.assign(editor["style"], {
 		position: "fixed",
 		left: "0",
 		bottom: "0",
@@ -116,7 +59,7 @@ function openEditor(cue) {
 		input.style.width = "70px";
 
 		function update(val) {
-			val = parseFloat(val);
+			val = +val;
 			if (isNaN(val)) return;
 
 			setter(val);
@@ -276,9 +219,88 @@ function openEditor(cue) {
 
 	// --- Text editing ---
 	editor.appendChild(textEditor());
-	video.currentTime = cue.startTime;
+	if (video) video.currentTime = cue.startTime;
 
 	document.body.appendChild(editor);
+}
+
+function openStyleEditor() {
+	let panel = document.getElementById("style-debug-panel");
+	if (!panel) {
+		panel = document.createElement("div");
+		panel.id = "style-debug-panel";
+		Object.assign(panel.style, {
+			position: "fixed",
+			right: "0",
+			bottom: "0",
+			width: "340px",
+			maxHeight: "60vh",
+			background: "#111",
+			color: "#fff",
+			zIndex: 999999,
+			fontFamily: "monospace",
+			fontSize: "12px",
+			padding: "10px",
+			overflow: "auto",
+			borderTop: "1px solid rgba(255,255,255,0.2)",
+		});
+
+		const title = document.createElement("div");
+		title.textContent = "CSS Debug";
+		title.style.marginBottom = "8px";
+		panel.appendChild(title);
+
+		const textarea = document.createElement("textarea");
+		textarea.id = "vtt-style-editor";
+		textarea.style.width = "100%";
+		textarea.style.height = "220px";
+		textarea.style.boxSizing = "border-box";
+		textarea.style.fontFamily = "monospace";
+		textarea.style.fontSize = "12px";
+		panel.appendChild(textarea);
+
+		const apply = document.createElement("button");
+		apply.textContent = "Apply CSS";
+		apply.style.marginTop = "8px";
+		apply.style.width = "100%";
+		apply.onclick = () => {
+			const styleEl = document.getElementById("vtt-style");
+			if (!styleEl) return;
+			styleEl.textContent = textarea.value;
+		};
+		panel.appendChild(apply);
+
+		const presets = document.createElement("div");
+		presets.style.marginTop = "8px";
+		presets.style.display = "flex";
+		presets.style.gap = "6px";
+		presets.style.flexWrap = "wrap";
+
+		const presetValues = [
+			"::cue(c) { line-height: 1.0; font-size: 100%; }",
+			"::cue(c) { line-height: 1.2; font-size: 110%; }",
+			"::cue(c) { line-height: 1.5; font-size: 100%; }",
+		];
+
+		presetValues.forEach((value) => {
+			const b = document.createElement("button");
+			b.textContent = value.match(/line-height:\s*([^;]+)/)?.[1] || "preset";
+			b.onclick = () => {
+				textarea.value = value;
+				const styleEl = document.getElementById("vtt-style");
+				if (styleEl) styleEl.textContent = value;
+			};
+			presets.appendChild(b);
+		});
+
+		panel.appendChild(presets);
+		document.body.appendChild(panel);
+	}
+
+	const styleEl = document.getElementById("vtt-style");
+	const textarea = document.getElementById("vtt-style-editor");
+	textarea["value"] =
+		styleEl ? styleEl.textContent : `::cue(c) { line-height: 1.2; }`;
 }
 
 function formatTime(seconds) {
@@ -295,9 +317,11 @@ function formatTime(seconds) {
 		`${hours ? pad2(minutes) : minutes}:${pad2(secs)}.${pad3(ms)}`
 	);
 }
-
+/** @arg {TextTrack} track */
 function buildCueList(track) {
-	const panel = Object.assign(document.createElement("div"), { id: "cue-list-panel" });
+	const panel = Object.assign(document.createElement("div"), {
+		id: "cue-list-panel",
+	});
 	panel.style.cssText = `
         position:fixed;
         right:0;
@@ -336,7 +360,7 @@ function buildCueList(track) {
 
 // #End of debug code
 
-/** @type {Set<string>} */
+/** @type {Set<String>} */
 const seen = new Set();
 const getVideo = () => document.querySelector("video");
 const defaultFont =
@@ -356,6 +380,7 @@ const removeParams = [
 	"cplatform",
 ];
 let video = getVideo();
+/** @type {TextTrack | null} */
 let track = null;
 
 /** @type {(videoWidth: number, videoHeight: number) => number} */
@@ -380,11 +405,11 @@ function ts(ms, format = false) {
 	return ms / 1000;
 }
 
-/** @type {(num: number) => string} */
+/** @type {(num: Number) => String} */
 const rgb = (num) => `${(num >> 16) & 255},${(num >> 8) & 255},${num & 255}`;
-/** @type {(num: number, decimals?: number) => number} */
+/** @type {(num: Number, decimals?: Number) => Number} */
 const rd = (num, decimals = 4) => +num.toFixed(decimals);
-
+/** @type {(pen: Json3Pen) => String} */
 function penFontFamily(pen) {
 	const fontFamily = pen.fsFontStyle;
 	switch (fontFamily) {
@@ -395,6 +420,7 @@ function penFontFamily(pen) {
 		case 3:
 			return '"Deja Vu Sans Mono", "Lucida Console", Monaco, Consolas, "PT Mono", monospace';
 		case 4:
+		default:
 			return defaultFont;
 		case 5:
 			return '"Comic Sans MS", Impact, Handlee, fantasy';
@@ -405,7 +431,7 @@ function penFontFamily(pen) {
 	}
 }
 
-/** @type {(json: string) => Json3} */
+/** @type {(json: String) => Json3} */
 const parseJson3 = (json) => {
 	try {
 		return JSON.parse(json);
@@ -419,16 +445,17 @@ const parseJson3 = (json) => {
 	}
 };
 
-/** @type {(params: URLSearchParams) => string} */
+/** @type {(params: URLSearchParams) => String} */
 const toKeyString = (p) =>
 	`${p.get("v")}|${p.get("lang")}|${p.get("tlang") ?? "  "}|${p.get("kind") ?? " "}`;
 
 /** @type {(video: HTMLVideoElement | null) => {width: number, height: number}} */
 function getVideoSize(video) {
 	if (!video) return { width: 0, height: 0 };
-	if (!video?.webkitDisplayingFullscreen) {
+	if (!video["webkitDisplayingFullscreen"]) {
 		return { width: video.clientWidth, height: video.clientHeight };
 	}
+
 	const vw = video.videoWidth;
 	const vh = video.videoHeight;
 
@@ -451,7 +478,7 @@ function getVideoSize(video) {
 	};
 }
 
-/** @type {(pen: Json3Pen, fs: number) => string} */
+/** @type {(pen: Json3Pen, fs: number) => String} */
 function penToCss(pen, fs) {
 	if (!pen) return "";
 
@@ -518,7 +545,7 @@ function penToCss(pen, fs) {
 				// Blur/drop shadow
 				for (let blur = w; blur <= Math.max(5 * scale, 1); blur += scale) {
 					shadows.push(
-						`max(0.0625em,1px) max(0.0625em,1px) ${0.03125 * blur / scale}em ${darkShadow}`,
+						`max(0.0625em,1px) max(0.0625em,1px) ${(0.03125 * blur) / scale}em ${darkShadow}`,
 					);
 				}
 				break;
@@ -563,13 +590,15 @@ function penToCss(pen, fs) {
 function setCaptionStyle(cssText) {
 	let styleEl = document.getElementById("vtt-style");
 	if (!styleEl) {
-		styleEl = Object.assign(document.createElement("style"), { id: "vtt-style" });
+		styleEl = Object.assign(document.createElement("style"), {
+			id: "vtt-style",
+		});
 		document.head.appendChild(styleEl);
 	}
 	styleEl.textContent = cssText;
 }
 
-/** @type {(pens: Json3Pen[]) => string} */
+/** @type {(pens: Json3Pen[]) => String} */
 function generatePenStyles(pens) {
 	const fs = 89 * (0.75 + (pens[0].szPenSize ?? 100) / 400);
 	let style = `::cue(c) {\nfont-family: ${defaultFont};\nfont-size: ${fs}%;\nbackground: rgba(0,0,0,0.5);${isMWEB ? "\nfont-weight: 500;" : ""}\n}\n`;
@@ -607,19 +636,22 @@ function mapPosToCue(pos, pen, style, isAutoGen) {
 	if (hasAnchor && LEFT_ANCHORS.has(anchorPoint)) {
 		hor = Math.max(hor / (1 + fontSizeIncrement * 2), 2);
 	}
-
+	/** @type {AlignSetting | null} */
 	let align =
 		LEFT_ANCHORS.has(anchorPoint) ? "left"
 		: RIGHT_ANCHORS.has(anchorPoint) ? "right"
-		: "";
+		: null;
+	/** @type {PositionAlignSetting} */
 	let positionAlign =
 		LEFT_ANCHORS.has(anchorPoint) ? "line-left"
 		: RIGHT_ANCHORS.has(anchorPoint) ? "line-right"
-		: "";
+		: "center";
+	/** @type {LineAlignSetting} */
 	let lineAlign =
 		anchorPoint >= 3 && anchorPoint <= 5 ? "center"
 		: anchorPoint >= 6 ? "end"
-		: undefined;
+		: "start";
+	/** @type {DirectionSetting} */
 	let vertical = "";
 
 	switch (style?.juJustifCode) {
@@ -632,8 +664,8 @@ function mapPosToCue(pos, pen, style, isAutoGen) {
 			positionAlign = "line-right";
 			break;
 		case 2:
-			align = "";
-			positionAlign = "";
+			align = "center";
+			positionAlign = "center";
 	}
 
 	if (style?.pdPrintDir === 1 || style?.pdPrintDir === 2) {
@@ -649,8 +681,8 @@ function mapPosToCue(pos, pen, style, isAutoGen) {
 		line: Math.max(rd(ver, 2), 0),
 		position: rd(hor, 2), // defaults to 'auto'
 		align: align, // defaults to 'center'
-		positionAlign: positionAlign, // Defaults to 'auto'
-		lineAlign: lineAlign, // Defaults to 'start'
+		positionAlign: positionAlign != "center" ? positionAlign : null, // Defaults to 'auto'
+		lineAlign: lineAlign != "start" ? lineAlign : null, // Defaults to 'start'
 		vertical: vertical, // defaults to none
 	};
 }
@@ -730,24 +762,25 @@ function addCuesToTrack(json, isAutoGen) {
 		const placement = mapPosToCue(pos, eventPen, eventStyle, isAutoGen);
 
 		cue.line = placement.line;
-		if (placement.position != null) cue.position = rd(placement.position, 2);
+		if (placement.position) cue.position = rd(placement.position, 2);
 		if (placement.align) cue.align = placement.align;
 		if (placement.positionAlign) cue.positionAlign = placement.positionAlign;
 		if (placement.lineAlign) cue.lineAlign = placement.lineAlign;
 		if (placement.vertical) cue.vertical = placement.vertical;
 
-		track.addCue(cue);
+		track?.addCue(cue);
 	}
 	if (!isAutoGen) return;
 	// ---------- detect overlapping cues, merge left-align lines ----------
 	// Use event-based algorithm instead of nested loops for better performance
-	const cues = [...track.cues];
+	const cues = [...(track?.cues ?? [])];
 	if (cues.length < 2) return;
 
 	// Sort by start time for efficient interval merging
 	const sorted = cues
 		.map((c, i) => ({ cue: c, idx: i }))
 		.sort((a, b) => a.cue.startTime - b.cue.startTime);
+	/** @type {Set<VTTCue>} */
 	const toRemove = new Set();
 
 	for (let i = 0; i < sorted.length; i++) {
@@ -849,9 +882,11 @@ createCaptionEditorButton(() => {
 	const list = document.querySelector("#cue-list-panel");
 	const editor = document.querySelector("#cue-editor");
 	if (list) {
-		list.style.display = list.style.display === "none" ? "block" : "none";
+		list["style"].display = list["style"].display === "none" ? "block" : "none";
 	} else {
-		buildCueList(track);
+		if (track) {
+			buildCueList(track);
+		}
 	}
 });
 
@@ -882,24 +917,27 @@ XMLHttpRequest.prototype.open = function (...args) {
 			});
 		};
 
-		if (video !== v) { // Update video reference if changed
+		if (video !== v) {
+			// Update video reference if changed
 			video = v;
 			track = null; // Reset track for new video
-		};
+		}
 
 		function createTrack() {
 			const language = p.get("tlang") || p.get("lang") || userLang;
-			if (!track) {
-				track = video.addTextTrack(
-					"captions",
-					`Injected CC${p.has("tlang") ? " (TS)" : ""}`,
-					language,
-				);
+			if (!track && video) {
+				track =
+					video.textTracks[0] ||
+					video.addTextTrack(
+						"captions",
+						`Injected CC${p.has("tlang") ? " (TS)" : ""}`,
+						language,
+					);
 				track.mode = "showing"; // debug so not hidden
 				initVideo();
 				console.log("Injected captions track");
 			} else {
-				if (track.cues) {
+				if (track?.cues) {
 					[...track.cues].forEach((cue) => track?.removeCue(cue)); // Clear existing cues
 
 					document.querySelector("#cue-list-panel")?.remove();
@@ -927,8 +965,9 @@ XMLHttpRequest.prototype.open = function (...args) {
 };
 
 function initVideo() {
+	if (!video) return;
 	console.log("Video caption handlers initialized");
-
+/*
 	// fullscreen hooks
 	video.addEventListener("webkitbeginfullscreen", () => {
 		track && (track.mode = "showing");
@@ -937,17 +976,18 @@ function initVideo() {
 	video.addEventListener("webkitendfullscreen", () => {
 		track && (track.mode = "hidden");
 	});
-
+*/
 	new MutationObserver(() => {
-		if (!track.cues.length) return;
+		if (!track?.cues?.length) return;
 		seen.clear();
-		[...track.cues].forEach((cue) => track?.removeCue(cue));
+		/*[...track.cues].forEach((cue) => track?.removeCue(cue));
 		if (track?.mode === "showing") {
 			track.mode = "hidden";
 			track.mode = "showing";
 		} // Refresh
+		 */
 		document.querySelector("#cue-list-panel")?.remove();
 		document.querySelector("#cue-editor")?.remove();
-		console.log("Video source changed, cues cleared");
+		console.log("Video source changed");
 	}).observe(video, { attributeFilter: ["src"] });
 }

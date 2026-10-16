@@ -2,6 +2,9 @@
 
 Restores captions when watching YouTube in fullscreen on iOS Safari (or any iOS browser using the WebKit engine), where YouTube's native caption system stops working.
 
+## Current Focus
+Attempt to use Youtube's new built in WebVTT captions track
+
 ## How it works
 
 1. Intercepts the `/api/timedtext` request YouTube makes to fetch captions

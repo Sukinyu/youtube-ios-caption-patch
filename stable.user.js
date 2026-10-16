@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         MWeb Youtube Captions Patch (stable)
 // @author       Sukinyu
-// @version      1.2.13
-// @last         7/23/2026 (mm/dd/yyyy)
+// @version      1.2.14
+// @last         10/16/2026 (mm/dd/yyyy)
 // @description  Fix captions on youtube videos in webkit fullscreen mode on iOS (https://m.youtube.com/).
 // @match        https://m.youtube.com/*
 // @updateURL    https://github.com/Sukinyu/youtube-ios-caption-patch/raw/refs/heads/main/stable.user.js
@@ -74,6 +74,7 @@ function penFontFamily(pen) {
 	}
 }
 
+/** @type {(json: String) => Json3} */
 const parseJson3 = (json) => {
 	try {
 		return JSON.parse(json);
