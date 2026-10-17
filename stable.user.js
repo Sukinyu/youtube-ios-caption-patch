@@ -1,14 +1,15 @@
 // ==UserScript==
 // @name         MWeb Youtube Captions Patch (stable)
 // @author       Sukinyu
-// @version      1.2.14
+// @version      1.2.15
 // @last         10/16/2026 (mm/dd/yyyy)
 // @description  Fix captions on youtube videos in webkit fullscreen mode on iOS (https://m.youtube.com/).
 // @match        https://m.youtube.com/*
 // @updateURL    https://github.com/Sukinyu/youtube-ios-caption-patch/raw/refs/heads/main/stable.user.js
 // @downloadURL  https://github.com/Sukinyu/youtube-ios-caption-patch/raw/refs/heads/main/stable.user.js
 // ==/UserScript==
-
+/// <reference path="./types-def.js" />
+/** @type {Set<string>} */
 const seen = new Set();
 const getVideo = () => document.querySelector("video");
 const defaultFont =
@@ -27,7 +28,9 @@ const removeParams = [
 	"cosver",
 	"cplatform",
 ];
+/** @type {HTMLVideoElement | null} */
 let video = getVideo();
+/** @type {TextTrack | null} */
 let track = null;
 
 function calculateBaseFontSize(videoWidth, videoHeight) {
@@ -64,6 +67,7 @@ function penFontFamily(pen) {
 		case 3:
 			return '"Deja Vu Sans Mono", "Lucida Console", Monaco, Consolas, "PT Mono", monospace';
 		case 4:
+		default:
 			return defaultFont;
 		case 5:
 			return '"Comic Sans MS", Impact, Handlee, fantasy';
@@ -93,9 +97,10 @@ const toKeyString = (p) =>
 
 function getVideoSize(video) {
 	if (!video) return { width: 0, height: 0 };
-	if (!video?.webkitDisplayingFullscreen) {
+	if (!video["webkitDisplayingFullscreen"]) {
 		return { width: video.clientWidth, height: video.clientHeight };
 	}
+
 	const vw = video.videoWidth;
 	const vh = video.videoHeight;
 
@@ -184,7 +189,7 @@ function penToCss(pen, fs) {
 				// Blur/drop shadow
 				for (let blur = w; blur <= Math.max(5 * scale, 1); blur += scale) {
 					shadows.push(
-						`max(0.0625em,1px) max(0.0625em,1px) ${0.03125 * blur / scale}em ${darkShadow}`,
+						`max(0.0625em,1px) max(0.0625em,1px) ${(0.03125 * blur) / scale}em ${darkShadow}`,
 					);
 				}
 				break;
@@ -229,7 +234,9 @@ function penToCss(pen, fs) {
 function setCaptionStyle(cssText) {
 	let styleEl = document.getElementById("vtt-style");
 	if (!styleEl) {
-		styleEl = Object.assign(document.createElement("style"), { id: "vtt-style" });
+		styleEl = Object.assign(document.createElement("style"), {
+			id: "vtt-style",
+		});
 		document.head.appendChild(styleEl);
 	}
 	styleEl.textContent = cssText;
@@ -271,19 +278,22 @@ function mapPosToCue(pos, pen, style, isAutoGen) {
 	if (hasAnchor && LEFT_ANCHORS.has(anchorPoint)) {
 		hor = Math.max(hor / (1 + fontSizeIncrement * 2), 2);
 	}
-
+	/** @type {AlignSetting | null} */
 	let align =
 		LEFT_ANCHORS.has(anchorPoint) ? "left"
 		: RIGHT_ANCHORS.has(anchorPoint) ? "right"
-		: "";
+		: null;
+	/** @type {PositionAlignSetting} */
 	let positionAlign =
 		LEFT_ANCHORS.has(anchorPoint) ? "line-left"
 		: RIGHT_ANCHORS.has(anchorPoint) ? "line-right"
-		: "";
+		: "center";
+	/** @type {LineAlignSetting} */
 	let lineAlign =
 		anchorPoint >= 3 && anchorPoint <= 5 ? "center"
 		: anchorPoint >= 6 ? "end"
-		: undefined;
+		: "start";
+	/** @type {DirectionSetting} */
 	let vertical = "";
 
 	switch (style?.juJustifCode) {
@@ -296,8 +306,8 @@ function mapPosToCue(pos, pen, style, isAutoGen) {
 			positionAlign = "line-right";
 			break;
 		case 2:
-			align = "";
-			positionAlign = "";
+			align = "center";
+			positionAlign = "center";
 	}
 
 	if (style?.pdPrintDir === 1 || style?.pdPrintDir === 2) {
@@ -319,7 +329,9 @@ function mapPosToCue(pos, pen, style, isAutoGen) {
 	};
 }
 
+/** @type {(json: Json3, isAutoGen: boolean) => void} */
 function addCuesToTrack(json, isAutoGen) {
+	if (!track) return;
 	const events = json.events || [];
 	const pens = json.pens || [{}];
 	const wpWinPositions = json.wpWinPositions || [];
@@ -403,13 +415,14 @@ function addCuesToTrack(json, isAutoGen) {
 	if (!isAutoGen) return;
 	// ---------- detect overlapping cues, merge left-align lines ----------
 	// Use event-based algorithm instead of nested loops for better performance
-	const cues = [...track.cues];
+	const cues = /** @type {VTTCue[]} */ ([...(track?.cues ?? [])]);
 	if (cues.length < 2) return;
 
 	// Sort by start time for efficient interval merging
 	const sorted = cues
 		.map((c, i) => ({ cue: c, idx: i }))
 		.sort((a, b) => a.cue.startTime - b.cue.startTime);
+	/** @type {Set<VTTCue>} */
 	const toRemove = new Set();
 
 	for (let i = 0; i < sorted.length; i++) {
@@ -458,7 +471,7 @@ function addCuesToTrack(json, isAutoGen) {
 	}
 
 	// Batch remove marked cues
-	toRemove.forEach((cue) => track.removeCue(cue));
+	toRemove.forEach((cue) => track?.removeCue(cue));
 }
 const origOpen = XMLHttpRequest.prototype.open;
 
@@ -486,25 +499,26 @@ XMLHttpRequest.prototype.open = function (...args) {
 				return r.text();
 			});
 		};
-
-		if (video !== v) { // Update video reference if changed
+		if (video !== v) {
+			// Update video reference if changed
 			video = v;
 			track = null; // Reset track for new video
-		};
-
+		}
 		function createTrack() {
 			const language = p.get("tlang") || p.get("lang") || userLang;
-			if (!track) {
-				track = video.addTextTrack(
-					"captions",
-					`Injected CC${p.has("tlang") ? " (TS)" : ""}`,
-					language,
-				);
-				track.mode = "hidden";
+			if (!track && video) {
+				track =
+					video.textTracks[0] ||
+					video.addTextTrack(
+						"captions",
+						`Injected CC${p.has("tlang") ? " (TS)" : ""}`,
+						language,
+					);
+				track.mode = "showing"; // debug so not hidden
 				initVideo();
 				console.log("Injected captions track");
 			} else {
-				if (track.cues) {
+				if (track?.cues) {
 					[...track.cues].forEach((cue) => track?.removeCue(cue)); // Clear existing cues
 				}
 			}
@@ -529,8 +543,8 @@ XMLHttpRequest.prototype.open = function (...args) {
 };
 
 function initVideo() {
+	if (!video) return;
 	console.log("Video caption handlers initialized");
-
 	// fullscreen hooks
 	video.addEventListener("webkitbeginfullscreen", () => {
 		track && (track.mode = "showing");

@@ -1,16 +1,36 @@
 // ==UserScript==
 // @name         MWeb Youtube Captions Patch (beta)
 // @author       Sukinyu
-// @version      1.2.15
+// @version      1.2.16
 // @last         10/16/2026 (mm/dd/yyyy)
 // @description  Fix captions on youtube videos in webkit fullscreen mode on iOS (https://m.youtube.com/).
 // @match        https://m.youtube.com/*
 // @updateURL    https://github.com/Sukinyu/youtube-ios-caption-patch/raw/refs/heads/main/beta.user.js
 // @downloadURL  https://github.com/Sukinyu/youtube-ios-caption-patch/raw/refs/heads/main/beta.user.js
 // ==/UserScript==
-/** @type {Set<String>} */
-// @ts-ignore
-const seen = new Set();
+/// <reference path="./types-def.js" />
+/** @type {Map<string, Set<string>>} */
+const seenByVideo = new Map();
+const SEEN_VIDEO_LIMIT = 3;
+
+function getSeenRequests(videoId) {
+	const requests = seenByVideo.get(videoId) ?? new Set();
+	seenByVideo.delete(videoId);
+	seenByVideo.set(videoId, requests);
+	while (seenByVideo.size > SEEN_VIDEO_LIMIT) {
+		seenByVideo.delete(seenByVideo.keys().next().value);
+	}
+	return requests;
+}
+
+function hasSeen(videoId, requestKey) {
+	return getSeenRequests(videoId).has(requestKey);
+}
+
+function markSeen(videoId, requestKey) {
+	getSeenRequests(videoId).add(requestKey);
+}
+
 const getVideo = () => document.querySelector("video");
 const defaultFont =
 	'"YouTube Noto", Roboto, Arial, Helvetica, Verdana, "PT Sans Caption", sans-serif';
@@ -28,8 +48,76 @@ const removeParams = [
 	"cosver",
 	"cplatform",
 ];
+/** @type {HTMLVideoElement | null} */
 let video = getVideo();
+/** @type {TextTrack | null} */
 let track = null;
+/** @type {TextTrack | null} */
+let injectedTrack = null;
+/** @type {HTMLVideoElement | null} */
+let observedVideo = null;
+/** @type {string | null} */
+let requestedLanguage = null;
+
+function sameLanguage(track, language) {
+	return (
+		!!track.language &&
+		track.language.toLowerCase().split("-")[0] ===
+			language.toLowerCase().split("-")[0]
+	);
+}
+
+function getYouTubeTrack(language = requestedLanguage) {
+	if (!video) return null;
+	const tracks = [...video.querySelectorAll("track[src]")]
+		.filter((/** @type {HTMLTrackElement} */ element) => element.track)
+		.map((/** @type {HTMLTrackElement} */ element) => ({
+			element,
+			track: element.track,
+		}));
+	if (language) {
+		return (
+			tracks.find(({ track }) => sameLanguage(track, language))?.track ?? null
+		);
+	}
+	return (
+		tracks.find(({ track }) => track.mode === "showing")?.track ??
+		tracks.find(({ element }) => element.default)?.track ??
+		null
+	);
+}
+
+function adoptYouTubeTrack(nativeTrack) {
+	if (injectedTrack && injectedTrack !== nativeTrack) {
+		injectedTrack.mode = "disabled";
+	}
+	track = nativeTrack;
+}
+
+function updateYouTubeTrack() {
+	const nativeTrack = getYouTubeTrack();
+	if (nativeTrack) adoptYouTubeTrack(nativeTrack);
+}
+
+function onTrackAdded(event) {
+	const nativeTrack = event.track;
+	if (!video) return;
+	const isSourceTrack = [...video.querySelectorAll("track[src]")].some(
+		(/** @type {HTMLTrackElement} */ element) => element.track === nativeTrack,
+	);
+	if (
+		isSourceTrack &&
+		(requestedLanguage ?
+			sameLanguage(nativeTrack, requestedLanguage)
+		:	nativeTrack.mode === "showing" ||
+			[...video.querySelectorAll("track[src]")].some(
+				(/** @type {HTMLTrackElement} */ element) =>
+					element.track === nativeTrack && element.default,
+			))
+	) {
+		adoptYouTubeTrack(nativeTrack);
+	}
+}
 
 function calculateBaseFontSize(videoWidth, videoHeight) {
 	let baseSize = (videoHeight / 360) * 16;
@@ -76,7 +164,7 @@ function penFontFamily(pen) {
 	}
 }
 
-/** @type {(json: String) => Json3} */
+/** @type {(json: string) => Json3} */
 const parseJson3 = (json) => {
 	try {
 		return JSON.parse(json);
@@ -329,6 +417,7 @@ function mapPosToCue(pos, pen, style, isAutoGen) {
 
 /** @type {(json: Json3, isAutoGen: boolean) => void} */
 function addCuesToTrack(json, isAutoGen) {
+	if (!track || track !== injectedTrack) return;
 	const events = json.events || [];
 	const pens = json.pens || [{}];
 	const wpWinPositions = json.wpWinPositions || [];
@@ -412,7 +501,7 @@ function addCuesToTrack(json, isAutoGen) {
 	if (!isAutoGen) return;
 	// ---------- detect overlapping cues, merge left-align lines ----------
 	// Use event-based algorithm instead of nested loops for better performance
-	const cues = [...(track?.cues ?? [])];
+	const cues = /** @type {VTTCue[]} */ ([...(track?.cues ?? [])]);
 	if (cues.length < 2) return;
 
 	// Sort by start time for efficient interval merging
@@ -468,7 +557,7 @@ function addCuesToTrack(json, isAutoGen) {
 	}
 
 	// Batch remove marked cues
-	toRemove.forEach((cue) => track.removeCue(cue));
+	toRemove.forEach((cue) => track?.removeCue(cue));
 }
 const origOpen = XMLHttpRequest.prototype.open;
 
@@ -480,19 +569,26 @@ XMLHttpRequest.prototype.open = function (...args) {
 		if (url.pathname != "/api/timedtext") return;
 		const p = url.searchParams;
 		const keyString = toKeyString(p);
+		const videoId = p.get("v") || "";
 		const v = getVideo();
-		if (seen.has(keyString) && v?.textTracks[0]) return;
-		seen.add(keyString);
+		initVideo(v);
+		if (hasSeen(videoId, keyString) && v?.textTracks[0]) return;
+		markSeen(videoId, keyString);
 		console.log("Caption request detected:", keyString);
 		const userLang = navigator.language.split("-")[0] || "en"; // Use browser language or default to English
 		const isWantedLang = p.get("lang")?.startsWith(userLang);
 		const isAutoGen = p.get("kind") === "asr";
+		requestedLanguage =
+			!isWantedLang && !p.has("tlang") ?
+				userLang
+			:	p.get("tlang") || p.get("lang") || userLang;
+		updateYouTubeTrack();
 
 		const tryFetch = (returnFormat) => {
 			p.set("fmt", returnFormat);
 			return fetch(url.href).then((r) => {
 				if (!r.ok) throw new Error(`HTTP ${r.status}`);
-				seen.add(toKeyString(p));
+				markSeen(videoId, toKeyString(p));
 				return r.text();
 			});
 		};
@@ -504,21 +600,24 @@ XMLHttpRequest.prototype.open = function (...args) {
 */
 		function createTrack() {
 			const language = p.get("tlang") || p.get("lang") || userLang;
-			if (!track && video) {
-				track =
-					video.textTracks[0] ||
-					video.addTextTrack(
-						"captions",
-						`Injected CC${p.has("tlang") ? " (TS)" : ""}`,
-						language,
-					);
-				track.mode = "showing"; // debug so not hidden
-				initVideo();
+			const nativeTrack = getYouTubeTrack(language);
+			if (nativeTrack) {
+				adoptYouTubeTrack(nativeTrack);
+				return;
+			}
+			if (!video) return;
+			if (!injectedTrack) {
+				injectedTrack = video.addTextTrack(
+					"captions",
+					`Injected CC${p.has("tlang") ? " (TS)" : ""}`,
+					language,
+				);
+				injectedTrack.mode = "showing";
 				console.log("Injected captions track");
-			} else {
-				if (track?.cues) {
-					[...track.cues].forEach((cue) => track?.removeCue(cue)); // Clear existing cues
-				}
+			}
+			track = injectedTrack;
+			if (track.cues) {
+				[...track.cues].forEach((cue) => track?.removeCue(cue)); // Clear existing cues
 			}
 		}
 
@@ -540,9 +639,19 @@ XMLHttpRequest.prototype.open = function (...args) {
 	return origOpen.apply(this, args);
 };
 
-function initVideo() {
-	if (!video) return;
-	console.log("Video caption handlers initialized");
+function initVideo(nextVideo = getVideo()) {
+	if (!nextVideo) return;
+	if (observedVideo !== nextVideo) {
+		observedVideo?.textTracks.removeEventListener("addtrack", onTrackAdded);
+		video = nextVideo;
+		observedVideo = nextVideo;
+		track = null;
+		injectedTrack = null;
+		requestedLanguage = null;
+		observedVideo.textTracks.addEventListener("addtrack", onTrackAdded);
+		console.log("Video caption handlers initialized");
+	}
+	updateYouTubeTrack();
 	/*
 	// fullscreen hooks
 	video.addEventListener("webkitbeginfullscreen", () => {
@@ -565,3 +674,5 @@ function initVideo() {
 	}).observe(video, { attributeFilter: ["src"] });
 	*/
 }
+
+initVideo();

@@ -7,7 +7,6 @@
 // @downloadURL  https://github.com/Sukinyu/youtube-ios-caption-patch/raw/refs/heads/main/test.user.js
 // ==/UserScript==
 // Start of debug code
-
 /** @arg {TextTrack} track */
 function getActiveCues(track) {
 	return [...(track?.cues || [])];
@@ -357,10 +356,10 @@ function buildCueList(track) {
 
 	document.body.appendChild(panel);
 }
-
 // #End of debug code
 
-/** @type {Set<String>} */
+/// <reference path="./types-def.js" />
+/** @type {Set<string>} */
 const seen = new Set();
 const getVideo = () => document.querySelector("video");
 const defaultFont =
@@ -405,11 +404,11 @@ function ts(ms, format = false) {
 	return ms / 1000;
 }
 
-/** @type {(num: Number) => String} */
+/** @type {(num: Number) => string} */
 const rgb = (num) => `${(num >> 16) & 255},${(num >> 8) & 255},${num & 255}`;
 /** @type {(num: Number, decimals?: Number) => Number} */
 const rd = (num, decimals = 4) => +num.toFixed(decimals);
-/** @type {(pen: Json3Pen) => String} */
+/** @type {(pen: Json3Pen) => string} */
 function penFontFamily(pen) {
 	const fontFamily = pen.fsFontStyle;
 	switch (fontFamily) {
@@ -431,7 +430,7 @@ function penFontFamily(pen) {
 	}
 }
 
-/** @type {(json: String) => Json3} */
+/** @type {(json: string) => Json3} */
 const parseJson3 = (json) => {
 	try {
 		return JSON.parse(json);
@@ -445,7 +444,7 @@ const parseJson3 = (json) => {
 	}
 };
 
-/** @type {(params: URLSearchParams) => String} */
+/** @type {(params: URLSearchParams) => string} */
 const toKeyString = (p) =>
 	`${p.get("v")}|${p.get("lang")}|${p.get("tlang") ?? "  "}|${p.get("kind") ?? " "}`;
 
@@ -478,7 +477,7 @@ function getVideoSize(video) {
 	};
 }
 
-/** @type {(pen: Json3Pen, fs: number) => String} */
+/** @type {(pen: Json3Pen, fs: number) => string} */
 function penToCss(pen, fs) {
 	if (!pen) return "";
 
@@ -598,7 +597,7 @@ function setCaptionStyle(cssText) {
 	styleEl.textContent = cssText;
 }
 
-/** @type {(pens: Json3Pen[]) => String} */
+/** @type {(pens: Json3Pen[]) => string} */
 function generatePenStyles(pens) {
 	const fs = 89 * (0.75 + (pens[0].szPenSize ?? 100) / 400);
 	let style = `::cue(c) {\nfont-family: ${defaultFont};\nfont-size: ${fs}%;\nbackground: rgba(0,0,0,0.5);${isMWEB ? "\nfont-weight: 500;" : ""}\n}\n`;
@@ -716,7 +715,7 @@ function addCuesToTrack(json, isAutoGen) {
 			continue;
 		}
 
-		/** @type {String[]} */
+		/** @type {string[]} */
 		const parts = [];
 
 		if (ev.wWinId != null) {
