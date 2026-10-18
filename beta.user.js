@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         MWeb Youtube Captions Patch (beta)
 // @author       Sukinyu
-// @version      1.2.16
-// @last         10/16/2026 (mm/dd/yyyy)
+// @version      1.2.17
+// @last         10/18/2026 (mm/dd/yyyy)
 // @description  Fix captions on youtube videos in webkit fullscreen mode on iOS (https://m.youtube.com/).
 // @match        https://m.youtube.com/*
 // @updateURL    https://github.com/Sukinyu/youtube-ios-caption-patch/raw/refs/heads/main/beta.user.js
@@ -58,6 +58,7 @@ let injectedTrack = null;
 let observedVideo = null;
 /** @type {string | null} */
 let requestedLanguage = null;
+let youtubeTrackActivated = false;
 
 function sameLanguage(track, language) {
 	return (
@@ -75,13 +76,11 @@ function getYouTubeTrack(language = requestedLanguage) {
 			element,
 			track: element.track,
 		}));
-	if (language) {
-		return (
-			tracks.find(({ track }) => sameLanguage(track, language))?.track ?? null
-		);
-	}
 	return (
-		tracks.find(({ track }) => track.mode === "showing")?.track ??
+		(language ?
+			tracks.find(({ track }) => sameLanguage(track, language))?.track
+		:	null) ??
+		tracks.find(({ track }) => track.mode === "hidden")?.track ??
 		tracks.find(({ element }) => element.default)?.track ??
 		null
 	);
@@ -96,7 +95,12 @@ function adoptYouTubeTrack(nativeTrack) {
 
 function updateYouTubeTrack() {
 	const nativeTrack = getYouTubeTrack();
-	if (nativeTrack) adoptYouTubeTrack(nativeTrack);
+	if (nativeTrack?.mode === "hidden") {
+		adoptYouTubeTrack(nativeTrack);
+	} else if (youtubeTrackActivated) {
+		if (injectedTrack) injectedTrack.mode = "disabled";
+		track = null;
+	}
 }
 
 function onTrackAdded(event) {
@@ -105,18 +109,11 @@ function onTrackAdded(event) {
 	const isSourceTrack = [...video.querySelectorAll("track[src]")].some(
 		(/** @type {HTMLTrackElement} */ element) => element.track === nativeTrack,
 	);
-	if (
-		isSourceTrack &&
-		(requestedLanguage ?
-			sameLanguage(nativeTrack, requestedLanguage)
-		:	nativeTrack.mode === "showing" ||
-			[...video.querySelectorAll("track[src]")].some(
-				(/** @type {HTMLTrackElement} */ element) =>
-					element.track === nativeTrack && element.default,
-			))
-	) {
-		adoptYouTubeTrack(nativeTrack);
-	}
+	if (isSourceTrack) updateYouTubeTrack();
+}
+
+function onTrackChange() {
+	updateYouTubeTrack();
 }
 
 function calculateBaseFontSize(videoWidth, videoHeight) {
@@ -179,7 +176,7 @@ const parseJson3 = (json) => {
 };
 
 const toKeyString = (p) =>
-	`${p.get("v")}|${p.get("lang")}|${p.get("tlang") ?? "  "}|${p.get("kind") ?? " "}`;
+	`${p.get("v")}|${p.get("lang")}|${p.get("tlang") ?? "  "}|${p.get("kind") ?? "  "}`;
 
 function getVideoSize(video) {
 	if (!video) return { width: 0, height: 0 };
@@ -600,9 +597,14 @@ XMLHttpRequest.prototype.open = function (...args) {
 */
 		function createTrack() {
 			const language = p.get("tlang") || p.get("lang") || userLang;
-			const nativeTrack = getYouTubeTrack(language);
-			if (nativeTrack) {
+			const nativeTrack = getYouTubeTrack();
+			if (nativeTrack?.mode === "hidden") {
 				adoptYouTubeTrack(nativeTrack);
+				return;
+			}
+			if (youtubeTrackActivated) {
+				if (injectedTrack) injectedTrack.mode = "disabled";
+				track = null;
 				return;
 			}
 			if (!video) return;
@@ -612,7 +614,7 @@ XMLHttpRequest.prototype.open = function (...args) {
 					`Injected CC${p.has("tlang") ? " (TS)" : ""}`,
 					language,
 				);
-				injectedTrack.mode = "showing";
+				injectedTrack.mode = "hidden";
 				console.log("Injected captions track");
 			}
 			track = injectedTrack;
@@ -642,37 +644,41 @@ XMLHttpRequest.prototype.open = function (...args) {
 function initVideo(nextVideo = getVideo()) {
 	if (!nextVideo) return;
 	if (observedVideo !== nextVideo) {
-		observedVideo?.textTracks.removeEventListener("addtrack", onTrackAdded);
+		if (observedVideo) {
+			observedVideo.textTracks.onaddtrack = null;
+			observedVideo.textTracks.onchange = null;
+		}
 		video = nextVideo;
 		observedVideo = nextVideo;
 		track = null;
 		injectedTrack = null;
 		requestedLanguage = null;
-		observedVideo.textTracks.addEventListener("addtrack", onTrackAdded);
+		youtubeTrackActivated = false;
+		observedVideo.textTracks.onaddtrack = onTrackAdded;
+		observedVideo.textTracks.onchange = onTrackChange;
 		console.log("Video caption handlers initialized");
 	}
 	updateYouTubeTrack();
-	/*
+
+	if (!video) return;
 	// fullscreen hooks
 	video.addEventListener("webkitbeginfullscreen", () => {
-		track && (track.mode = "showing");
+		injectedTrack && (injectedTrack.mode = "showing");
 	});
 
 	video.addEventListener("webkitendfullscreen", () => {
-		track && (track.mode = "hidden");
+		injectedTrack && (injectedTrack.mode = "hidden");
 	});
 
 	new MutationObserver(() => {
-		if (!track.cues.length) return;
-		seen.clear();
-		[...track.cues].forEach((cue) => track?.removeCue(cue));
-		if (track?.mode === "showing") {
-			track.mode = "hidden";
-			track.mode = "showing";
+		if (!injectedTrack?.cues?.length) return;
+		[...injectedTrack.cues].forEach((cue) => injectedTrack?.removeCue(cue));
+		if (injectedTrack?.mode === "showing") {
+			injectedTrack.mode = "hidden";
+			injectedTrack.mode = "showing";
 		} // Refresh
 		console.log("Video source changed, cues cleared");
 	}).observe(video, { attributeFilter: ["src"] });
-	*/
 }
 
 initVideo();
