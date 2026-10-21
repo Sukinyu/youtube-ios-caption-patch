@@ -1,35 +1,16 @@
 // ==UserScript==
 // @name         MWeb Youtube Captions Patch (beta)
 // @author       Sukinyu
-// @version      1.2.17
-// @last         10/20/2026 (mm/dd/yyyy)
+// @version      1.2.18
+// @last         10/21/2026 (mm/dd/yyyy)
 // @description  Fix captions on youtube videos in webkit fullscreen mode on iOS (https://m.youtube.com/).
 // @match        https://m.youtube.com/*
 // @updateURL    https://github.com/Sukinyu/youtube-ios-caption-patch/raw/refs/heads/main/beta.user.js
 // @downloadURL  https://github.com/Sukinyu/youtube-ios-caption-patch/raw/refs/heads/main/beta.user.js
 // ==/UserScript==
 /// <reference path="./types-def.js" />
-/** @type {Map<string, Set<string>>} */
-const seenByVideo = new Map();
-const SEEN_VIDEO_LIMIT = 3;
-
-function getSeenRequests(videoId) {
-	const requests = seenByVideo.get(videoId) ?? new Set();
-	seenByVideo.delete(videoId);
-	seenByVideo.set(videoId, requests);
-	while (seenByVideo.size > SEEN_VIDEO_LIMIT) {
-		seenByVideo.delete(seenByVideo.keys().next().value);
-	}
-	return requests;
-}
-
-function hasSeen(videoId, requestKey) {
-	return getSeenRequests(videoId).has(requestKey);
-}
-
-function markSeen(videoId, requestKey) {
-	getSeenRequests(videoId).add(requestKey);
-}
+/** @type {Set<string>} */
+const Seen = new Set();
 
 const getVideo = () => document.querySelector("video");
 const defaultFont =
@@ -70,7 +51,7 @@ function sameLanguage(track, language) {
 
 function getYouTubeTrack(language = requestedLanguage) {
 	if (!video) return null;
-	const tracks = [...video.querySelectorAll("track[src]")]
+	const tracks = [...video.querySelectorAll("track")]
 		.filter((/** @type {HTMLTrackElement} */ element) => element.track)
 		.map((/** @type {HTMLTrackElement} */ element) => ({
 			element,
@@ -104,13 +85,18 @@ function updateYouTubeTrack() {
 }
 
 function onTrackAdded(event) {
-	const nativeTrack = event.track;
-	alert(`Native Track added: ${nativeTrack.label} (${nativeTrack.language})`);
-	if (!video) return;
-	const isSourceTrack = [...video.querySelectorAll("track[src]")].some(
-		(/** @type {HTMLTrackElement} */ element) => element.track === nativeTrack,
-	);
-	if (isSourceTrack) updateYouTubeTrack();
+	try {
+		const nativeTrack = event.track;
+		alert(`Native Track added: ${nativeTrack.label} (${nativeTrack.language})`);
+		if (!video) return;
+		const isSourceTrack = [...video.querySelectorAll("track")].some(
+			(/** @type {HTMLTrackElement} */ element) =>// "track~~[src]~~"
+				element.track === nativeTrack,
+		);
+		if (isSourceTrack) updateYouTubeTrack();
+	} catch (err) {
+		alert(`${err}\n${err.stack}`);
+	}
 }
 
 function onTrackChange() {
@@ -178,6 +164,16 @@ const parseJson3 = (json) => {
 
 const toKeyString = (p) =>
 	`${p.get("v")}|${p.get("lang")}|${p.get("tlang") ?? "  "}|${p.get("kind") ?? "  "}`;
+
+/** @type {(videoId: ?string, keyString: string) => boolean} */
+function seen(videoId = null, newKey) {
+	if (Seen.size && ![...Seen].some((key) => key.split("|", 1)[0] === videoId)) {
+		Seen.clear();
+	}
+	if (Seen.has(newKey)) return true;
+	Seen.add(newKey);
+	return false;
+}
 
 function getVideoSize(video) {
 	if (!video) return { width: 0, height: 0 };
@@ -417,7 +413,7 @@ function mapPosToCue(pos, pen, style, isAutoGen) {
 function addCuesToTrack(json, isAutoGen) {
 	if (!track || track !== injectedTrack) return;
 	const events = json.events || [];
-	const pens = json.pens || [{}];
+	const pens = json.pens || [];
 	const wpWinPositions = json.wpWinPositions || [];
 	const wsWinStyles = json.wsWinStyles || [];
 
@@ -570,8 +566,7 @@ XMLHttpRequest.prototype.open = function (...args) {
 		const videoId = p.get("v") || "";
 		const v = getVideo();
 		initVideo(v);
-		if (hasSeen(videoId, keyString) && v?.textTracks[0]) return;
-		markSeen(videoId, keyString);
+		if (seen(videoId, keyString) && v?.textTracks[0]) return;
 		console.log("Caption request detected:", keyString);
 		const userLang = navigator.language.split("-")[0] || "en"; // Use browser language or default to English
 		const isWantedLang = p.get("lang")?.startsWith(userLang);
@@ -586,7 +581,7 @@ XMLHttpRequest.prototype.open = function (...args) {
 			p.set("fmt", returnFormat);
 			return fetch(url.href).then((r) => {
 				if (!r.ok) throw new Error(`HTTP ${r.status}`);
-				markSeen(videoId, toKeyString(p));
+				seen(videoId, toKeyString(p));
 				return r.text();
 			});
 		};
