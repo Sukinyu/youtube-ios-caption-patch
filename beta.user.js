@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         MWeb Youtube Captions Patch (beta)
 // @author       Sukinyu
-// @version      1.2.18
-// @last         10/21/2026 (mm/dd/yyyy)
+// @version      1.2.19
+// @last         10/23/2026 (mm/dd/yyyy)
 // @description  Fix captions on youtube videos in webkit fullscreen mode on iOS (https://m.youtube.com/).
 // @match        https://m.youtube.com/*
 // @updateURL    https://github.com/Sukinyu/youtube-ios-caption-patch/raw/refs/heads/main/beta.user.js
@@ -87,13 +87,15 @@ function updateYouTubeTrack() {
 function onTrackAdded(event) {
 	try {
 		const nativeTrack = event.track;
-		alert(`Native Track added: ${nativeTrack.label} (${nativeTrack.language})`);
 		if (!video) return;
 		const isSourceTrack = [...video.querySelectorAll("track")].some(
 			(/** @type {HTMLTrackElement} */ element) =>// "track~~[src]~~"
 				element.track === nativeTrack,
 		);
-		if (isSourceTrack) updateYouTubeTrack();
+		if (isSourceTrack) {
+			updateYouTubeTrack();
+			alert(`Native Track added: ${nativeTrack.label} (${nativeTrack.language})`);
+			}
 	} catch (err) {
 		alert(`${err}\n${err.stack}`);
 	}
