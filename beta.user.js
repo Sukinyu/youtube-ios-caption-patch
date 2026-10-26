@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         MWeb Youtube Captions Patch (beta)
 // @author       Sukinyu
-// @version      1.2.19
-// @last         10/23/2026 (mm/dd/yyyy)
+// @version      1.2.20
+// @last         10/26/2026 (mm/dd/yyyy)
 // @description  Fix captions on youtube videos in webkit fullscreen mode on iOS (https://m.youtube.com/).
 // @match        https://m.youtube.com/*
 // @updateURL    https://github.com/Sukinyu/youtube-ios-caption-patch/raw/refs/heads/main/beta.user.js
@@ -35,35 +35,16 @@ let video = getVideo();
 let track = null;
 /** @type {TextTrack | null} */
 let injectedTrack = null;
+/** @type {TextTrack | undefined} */
+let nativeTrack;
 /** @type {HTMLVideoElement | null} */
 let observedVideo = null;
-/** @type {string | null} */
-let requestedLanguage = null;
-let youtubeTrackActivated = false;
 
-function sameLanguage(track, language) {
-	return (
-		!!track.language &&
-		track.language.toLowerCase().split("-")[0] ===
-			language.toLowerCase().split("-")[0]
-	);
-}
-
-function getYouTubeTrack(language = requestedLanguage) {
-	if (!video) return null;
-	const tracks = [...video.querySelectorAll("track")]
-		.filter((/** @type {HTMLTrackElement} */ element) => element.track)
-		.map((/** @type {HTMLTrackElement} */ element) => ({
-			element,
-			track: element.track,
-		}));
-	return (
-		(language ?
-			tracks.find(({ track }) => sameLanguage(track, language))?.track
-		:	null) ??
-		tracks.find(({ track }) => track.mode === "hidden")?.track ??
-		tracks.find(({ element }) => element.default)?.track ??
-		null
+function getYouTubeTrack() {
+	if (!video) return;
+	return [...video.textTracks].find(
+		// @ts-ignore
+		(track) => track.kind === "forced" && track.language === "",
 	);
 }
 
@@ -74,31 +55,18 @@ function adoptYouTubeTrack(nativeTrack) {
 	track = nativeTrack;
 }
 
-function updateYouTubeTrack() {
-	const nativeTrack = getYouTubeTrack();
-	if (nativeTrack?.mode === "hidden") {
-		adoptYouTubeTrack(nativeTrack);
-	} else if (youtubeTrackActivated) {
-		if (injectedTrack) injectedTrack.mode = "disabled";
-		track = null;
-	}
+function updateYouTubeTrack(track = undefined) {
+	if (!video) return;
+	nativeTrack = track ?? getYouTubeTrack();
+	nativeTrack && adoptYouTubeTrack(nativeTrack);
 }
 
 function onTrackAdded(event) {
-	try {
-		const nativeTrack = event.track;
-		if (!video) return;
-		const isSourceTrack = [...video.querySelectorAll("track")].some(
-			(/** @type {HTMLTrackElement} */ element) =>// "track~~[src]~~"
-				element.track === nativeTrack,
-		);
-		if (isSourceTrack) {
-			updateYouTubeTrack();
-			alert(`Native Track added: ${nativeTrack.label} (${nativeTrack.language})`);
-			}
-	} catch (err) {
-		alert(`${err}\n${err.stack}`);
-	}
+	if (!video) return;
+	let track = getYouTubeTrack();
+	if (!track || event.track != track) return;
+	updateYouTubeTrack();
+	alert(`Native Track added: ${track.label} (${track.language})`);
 }
 
 function onTrackChange() {
@@ -573,10 +541,6 @@ XMLHttpRequest.prototype.open = function (...args) {
 		const userLang = navigator.language.split("-")[0] || "en"; // Use browser language or default to English
 		const isWantedLang = p.get("lang")?.startsWith(userLang);
 		const isAutoGen = p.get("kind") === "asr";
-		requestedLanguage =
-			!isWantedLang && !p.has("tlang") ?
-				userLang
-			:	p.get("tlang") || p.get("lang") || userLang;
 		updateYouTubeTrack();
 
 		const tryFetch = (returnFormat) => {
@@ -600,7 +564,7 @@ XMLHttpRequest.prototype.open = function (...args) {
 				adoptYouTubeTrack(nativeTrack);
 				return;
 			}
-			if (youtubeTrackActivated) {
+			if (nativeTrack) {
 				injectedTrack && (injectedTrack.mode = "disabled");
 				track = null;
 				return;
@@ -650,8 +614,6 @@ function initVideo(nextVideo = getVideo()) {
 		observedVideo = nextVideo;
 		track = null;
 		injectedTrack = null;
-		requestedLanguage = null;
-		youtubeTrackActivated = false;
 		observedVideo.textTracks.onaddtrack = onTrackAdded;
 		observedVideo.textTracks.onchange = onTrackChange;
 		console.log("Video caption handlers initialized");
@@ -662,13 +624,13 @@ function initVideo(nextVideo = getVideo()) {
 	// fullscreen hooks
 	video.addEventListener("webkitbeginfullscreen", () => {
 		injectedTrack &&
-			injectedTrack.mode != "disabled" &&
+			!nativeTrack &&
 			(injectedTrack.mode = "showing");
 	});
 
 	video.addEventListener("webkitendfullscreen", () => {
 		injectedTrack &&
-			injectedTrack.mode != "disabled" &&
+			!nativeTrack &&
 			(injectedTrack.mode = "hidden");
 	});
 
