@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         MWeb Youtube Captions Patch (beta)
 // @author       Sukinyu
-// @version      1.2.20
-// @last         10/26/2026 (mm/dd/yyyy)
+// @version      1.2.21
+// @last         10/27/2026 (mm/dd/yyyy)
 // @description  Fix captions on youtube videos in webkit fullscreen mode on iOS (https://m.youtube.com/).
 // @match        https://m.youtube.com/*
 // @updateURL    https://github.com/Sukinyu/youtube-ios-caption-patch/raw/refs/heads/main/beta.user.js
@@ -48,17 +48,19 @@ function getYouTubeTrack() {
 	);
 }
 
-function adoptYouTubeTrack(nativeTrack) {
-	if (injectedTrack && injectedTrack !== nativeTrack) {
+function adoptYouTubeTrack(_nativeTrack) {
+	if (injectedTrack && injectedTrack !== _nativeTrack) {
 		injectedTrack.mode = "disabled";
 	}
-	track = nativeTrack;
+	_nativeTrack && (track = _nativeTrack);
 }
 
-function updateYouTubeTrack(track = undefined) {
+function updateYouTubeTrack(_nativeTrack = undefined) {
 	if (!video) return;
-	nativeTrack = track ?? getYouTubeTrack();
-	nativeTrack && adoptYouTubeTrack(nativeTrack);
+	nativeTrack = _nativeTrack ?? getYouTubeTrack();
+	if (nativeTrack) {
+		adoptYouTubeTrack(nativeTrack);
+	} else track = injectedTrack;
 }
 
 function onTrackAdded(event) {
@@ -172,7 +174,7 @@ function getVideoSize(video) {
 		height: ch,
 	};
 }
-
+/** @type {(pen: Json3Pen, fs: number) => string} */
 function penToCss(pen, fs) {
 	if (!pen) return "";
 
@@ -281,6 +283,7 @@ function penToCss(pen, fs) {
 		.trim();
 }
 
+/** @type {(cssText: string) => void} */
 function setCaptionStyle(cssText) {
 	let styleEl = document.getElementById("vtt-style");
 	if (!styleEl) {
@@ -291,7 +294,7 @@ function setCaptionStyle(cssText) {
 	}
 	styleEl.textContent = cssText;
 }
-
+/** @type {(pens: Json3Pen[]) => string} */
 function generatePenStyles(pens) {
 	const fs = 89 * (0.75 + (pens[0].szPenSize ?? 100) / 400);
 	let style = `::cue(c) {\nfont-family: ${defaultFont};\nfont-size: ${fs}%;\nbackground: rgba(0,0,0,0.5);${isMWEB ? "\nfont-weight: 500;" : ""}\n}\n`;
@@ -381,7 +384,7 @@ function mapPosToCue(pos, pen, style, isAutoGen) {
 
 /** @type {(json: Json3, isAutoGen: boolean) => void} */
 function addCuesToTrack(json, isAutoGen) {
-	if (!track || track !== injectedTrack) return;
+	if (!track) return;
 	const events = json.events || [];
 	const pens = json.pens || [];
 	const wpWinPositions = json.wpWinPositions || [];
@@ -560,26 +563,22 @@ XMLHttpRequest.prototype.open = function (...args) {
 		function createTrack() {
 			const language = p.get("tlang") || p.get("lang") || userLang;
 			const nativeTrack = getYouTubeTrack();
-			if (nativeTrack?.mode === "hidden") {
+			if (!video) return;
+			if (nativeTrack) {
 				adoptYouTubeTrack(nativeTrack);
 				return;
+			} else {
+				if (!injectedTrack) {
+					injectedTrack = video.addTextTrack(
+						"captions",
+						`Injected CC${p.has("tlang") ? " (TS)" : ""}`,
+						language,
+					);
+					injectedTrack.mode = "hidden";
+					console.log("Injected captions track");
+				}
+				track = injectedTrack;
 			}
-			if (nativeTrack) {
-				injectedTrack && (injectedTrack.mode = "disabled");
-				track = null;
-				return;
-			}
-			if (!video) return;
-			if (!injectedTrack) {
-				injectedTrack = video.addTextTrack(
-					"captions",
-					`Injected CC${p.has("tlang") ? " (TS)" : ""}`,
-					language,
-				);
-				injectedTrack.mode = "hidden";
-				console.log("Injected captions track");
-			}
-			track = injectedTrack;
 			if (track.cues) {
 				[...track.cues].forEach((cue) => track?.removeCue(cue)); // Clear existing cues
 			}
@@ -623,15 +622,11 @@ function initVideo(nextVideo = getVideo()) {
 	if (!video) return;
 	// fullscreen hooks
 	video.addEventListener("webkitbeginfullscreen", () => {
-		injectedTrack &&
-			!nativeTrack &&
-			(injectedTrack.mode = "showing");
+		injectedTrack && !nativeTrack && (injectedTrack.mode = "showing");
 	});
 
 	video.addEventListener("webkitendfullscreen", () => {
-		injectedTrack &&
-			!nativeTrack &&
-			(injectedTrack.mode = "hidden");
+		injectedTrack && !nativeTrack && (injectedTrack.mode = "hidden");
 	});
 
 	new MutationObserver(() => {
