@@ -74,7 +74,7 @@ function onTrackAdded(event) {
 function onTrackChange() {
 	updateYouTubeTrack();
 }
-
+/** @type {(videoWidth: number, videoHeight: number) => number} */
 function calculateBaseFontSize(videoWidth, videoHeight) {
 	let baseSize = (videoHeight / 360) * 16;
 	if (videoHeight >= videoWidth) {
@@ -96,9 +96,11 @@ function ts(ms, format = false) {
 	return ms / 1000;
 }
 
+/** @type {(num: Number) => string} */
 const rgb = (num) => `${(num >> 16) & 255},${(num >> 8) & 255},${num & 255}`;
+/** @type {(num: Number, decimals?: Number) => Number} */
 const rd = (num, decimals = 4) => +num.toFixed(decimals);
-
+/** @type {(pen: Json3Pen) => string} */
 function penFontFamily(pen) {
 	const fontFamily = pen.fsFontStyle;
 	switch (fontFamily) {
@@ -134,6 +136,7 @@ const parseJson3 = (json) => {
 	}
 };
 
+/** @type {(params: URLSearchParams) => string} */
 const toKeyString = (p) =>
 	`${p.get("v")}|${p.get("lang")}|${p.get("tlang") ?? "  "}|${p.get("kind") ?? "  "}`;
 
@@ -147,6 +150,7 @@ function seen(videoId = null, newKey) {
 	return false;
 }
 
+/** @type {(video: HTMLVideoElement | null) => {width: number, height: number}} */
 function getVideoSize(video) {
 	if (!video) return { width: 0, height: 0 };
 	if (!video["webkitDisplayingFullscreen"]) {
@@ -174,6 +178,7 @@ function getVideoSize(video) {
 		height: ch,
 	};
 }
+
 /** @type {(pen: Json3Pen, fs: number) => string} */
 function penToCss(pen, fs) {
 	if (!pen) return "";
@@ -294,6 +299,7 @@ function setCaptionStyle(cssText) {
 	}
 	styleEl.textContent = cssText;
 }
+
 /** @type {(pens: Json3Pen[]) => string} */
 function generatePenStyles(pens) {
 	const fs = 89 * (0.75 + (pens[0].szPenSize ?? 100) / 400);
@@ -315,6 +321,7 @@ function generatePenStyles(pens) {
 const LEFT_ANCHORS = new Set([0, 3, 6]);
 const RIGHT_ANCHORS = new Set([2, 5, 8]);
 
+/** @param {Json3WinPos} pos @param {Json3Pen} pen @param {Json3WinStyle} style @param {boolean} isAutoGen*/
 function mapPosToCue(pos, pen, style, isAutoGen) {
 	pos || (pos = { avVerPos: 100, ahHorPos: 50, apPoint: 7 });
 
@@ -412,6 +419,7 @@ function addCuesToTrack(json, isAutoGen) {
 			continue;
 		}
 
+		/** @type {string[]} */
 		const parts = [];
 
 		if (ev.wWinId != null) {
@@ -554,19 +562,13 @@ XMLHttpRequest.prototype.open = function (...args) {
 				return r.text();
 			});
 		};
-		/*
-		if (video !== v) { // Update video reference if changed
-			video = v;
-			track = null; // Reset track for new video
-		};
-*/
+
 		function createTrack() {
 			const language = p.get("tlang") || p.get("lang") || userLang;
 			const nativeTrack = getYouTubeTrack();
 			if (!video) return;
 			if (nativeTrack) {
 				adoptYouTubeTrack(nativeTrack);
-				return;
 			} else {
 				if (!injectedTrack) {
 					injectedTrack = video.addTextTrack(
@@ -579,7 +581,7 @@ XMLHttpRequest.prototype.open = function (...args) {
 				}
 				track = injectedTrack;
 			}
-			if (track.cues) {
+			if (track?.cues) {
 				[...track.cues].forEach((cue) => track?.removeCue(cue)); // Clear existing cues
 			}
 		}

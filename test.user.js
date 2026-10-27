@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         MWeb Youtube Captions Patch (dev)
 // @author       Sukinyu
-// @version      60
+// @version      61
 // @match        https://m.youtube.com/*
 // @updateURL    https://github.com/Sukinyu/youtube-ios-caption-patch/raw/refs/heads/main/test.user.js
 // @downloadURL  https://github.com/Sukinyu/youtube-ios-caption-patch/raw/refs/heads/main/test.user.js
@@ -360,7 +360,8 @@ function buildCueList(track) {
 
 /// <reference path="./types-def.js" />
 /** @type {Set<string>} */
-const seen = new Set();
+const Seen = new Set();
+
 const getVideo = () => document.querySelector("video");
 const defaultFont =
 	'"YouTube Noto", Roboto, Arial, Helvetica, Verdana, "PT Sans Caption", sans-serif';
@@ -378,10 +379,51 @@ const removeParams = [
 	"cosver",
 	"cplatform",
 ];
+/** @type {HTMLVideoElement | null} */
 let video = getVideo();
 /** @type {TextTrack | null} */
 let track = null;
+/** @type {TextTrack | null} */
+let injectedTrack = null;
+/** @type {TextTrack | undefined} */
+let nativeTrack;
+/** @type {HTMLVideoElement | null} */
+let observedVideo = null;
 
+function getYouTubeTrack() {
+	if (!video) return;
+	return [...video.textTracks].find(
+		// @ts-ignore
+		(track) => track.kind === "forced" && track.language === "",
+	);
+}
+
+function adoptYouTubeTrack(_nativeTrack) {
+	if (injectedTrack && injectedTrack !== _nativeTrack) {
+		injectedTrack.mode = "disabled";
+	}
+	_nativeTrack && (track = _nativeTrack);
+}
+
+function updateYouTubeTrack(_nativeTrack = undefined) {
+	if (!video) return;
+	nativeTrack = _nativeTrack ?? getYouTubeTrack();
+	if (nativeTrack) {
+		adoptYouTubeTrack(nativeTrack);
+	} else track = injectedTrack;
+}
+
+function onTrackAdded(event) {
+	if (!video) return;
+	let track = getYouTubeTrack();
+	if (!track || event.track != track) return;
+	updateYouTubeTrack();
+	alert(`Native Track added: ${track.label} (${track.language})`);
+}
+
+function onTrackChange() {
+	updateYouTubeTrack();
+}
 /** @type {(videoWidth: number, videoHeight: number) => number} */
 function calculateBaseFontSize(videoWidth, videoHeight) {
 	let baseSize = (videoHeight / 360) * 16;
@@ -446,7 +488,17 @@ const parseJson3 = (json) => {
 
 /** @type {(params: URLSearchParams) => string} */
 const toKeyString = (p) =>
-	`${p.get("v")}|${p.get("lang")}|${p.get("tlang") ?? "  "}|${p.get("kind") ?? " "}`;
+	`${p.get("v")}|${p.get("lang")}|${p.get("tlang") ?? "  "}|${p.get("kind") ?? "  "}`;
+
+/** @type {(videoId: ?string, keyString: string) => boolean} */
+function seen(videoId = null, newKey) {
+	if (Seen.size && ![...Seen].some((key) => key.split("|", 1)[0] === videoId)) {
+		Seen.clear();
+	}
+	if (Seen.has(newKey)) return true;
+	Seen.add(newKey);
+	return false;
+}
 
 /** @type {(video: HTMLVideoElement | null) => {width: number, height: number}} */
 function getVideoSize(video) {
@@ -586,6 +638,7 @@ function penToCss(pen, fs) {
 		.trim();
 }
 
+/** @type {(cssText: string) => void} */
 function setCaptionStyle(cssText) {
 	let styleEl = document.getElementById("vtt-style");
 	if (!styleEl) {
@@ -680,16 +733,17 @@ function mapPosToCue(pos, pen, style, isAutoGen) {
 		line: Math.max(rd(ver, 2), 0),
 		position: rd(hor, 2), // defaults to 'auto'
 		align: align, // defaults to 'center'
-		positionAlign: positionAlign != "center" ? positionAlign : null, // Defaults to 'auto'
-		lineAlign: lineAlign != "start" ? lineAlign : null, // Defaults to 'start'
+		positionAlign: positionAlign, // Defaults to 'auto'
+		lineAlign: lineAlign, // Defaults to 'start'
 		vertical: vertical, // defaults to none
 	};
 }
 
 /** @type {(json: Json3, isAutoGen: boolean) => void} */
 function addCuesToTrack(json, isAutoGen) {
+	if (!track) return;
 	const events = json.events || [];
-	const pens = json.pens || [{}];
+	const pens = json.pens || [];
 	const wpWinPositions = json.wpWinPositions || [];
 	const wsWinStyles = json.wsWinStyles || [];
 
@@ -761,18 +815,18 @@ function addCuesToTrack(json, isAutoGen) {
 		const placement = mapPosToCue(pos, eventPen, eventStyle, isAutoGen);
 
 		cue.line = placement.line;
-		if (placement.position) cue.position = rd(placement.position, 2);
+		if (placement.position != null) cue.position = rd(placement.position, 2);
 		if (placement.align) cue.align = placement.align;
 		if (placement.positionAlign) cue.positionAlign = placement.positionAlign;
 		if (placement.lineAlign) cue.lineAlign = placement.lineAlign;
 		if (placement.vertical) cue.vertical = placement.vertical;
 
-		track?.addCue(cue);
+		track.addCue(cue);
 	}
 	if (!isAutoGen) return;
 	// ---------- detect overlapping cues, merge left-align lines ----------
 	// Use event-based algorithm instead of nested loops for better performance
-	const cues = [...(track?.cues ?? [])];
+	const cues = /** @type {VTTCue[]} */ ([...(track?.cues ?? [])]);
 	if (cues.length < 2) return;
 
 	// Sort by start time for efficient interval merging
@@ -828,7 +882,7 @@ function addCuesToTrack(json, isAutoGen) {
 	}
 
 	// Batch remove marked cues
-	toRemove.forEach((cue) => track.removeCue(cue));
+	toRemove.forEach((cue) => track?.removeCue(cue));
 }
 
 function createCaptionEditorButton(openEditor) {
@@ -899,49 +953,49 @@ XMLHttpRequest.prototype.open = function (...args) {
 		if (url.pathname != "/api/timedtext") return;
 		const p = url.searchParams;
 		const keyString = toKeyString(p);
+		const videoId = p.get("v") || "";
 		const v = getVideo();
-		if (seen.has(keyString) && v?.textTracks[0]) return;
-		seen.add(keyString);
+		initVideo(v);
+		if (seen(videoId, keyString) && v?.textTracks[0]) return;
 		console.log("Caption request detected:", keyString);
 		const userLang = navigator.language.split("-")[0] || "en"; // Use browser language or default to English
 		const isWantedLang = p.get("lang")?.startsWith(userLang);
 		const isAutoGen = p.get("kind") === "asr";
+		updateYouTubeTrack();
 
 		const tryFetch = (returnFormat) => {
 			p.set("fmt", returnFormat);
 			return fetch(url.href).then((r) => {
 				if (!r.ok) throw new Error(`HTTP ${r.status}`);
-				seen.add(toKeyString(p));
+				seen(videoId, toKeyString(p));
 				return r.text();
 			});
 		};
 
-		if (video !== v) {
-			// Update video reference if changed
-			video = v;
-			track = null; // Reset track for new video
-		}
-
 		function createTrack() {
 			const language = p.get("tlang") || p.get("lang") || userLang;
-			if (!track && video) {
-				track =
-					video.textTracks[0] ||
-					video.addTextTrack(
+			const nativeTrack = getYouTubeTrack();
+			if (!video) return;
+			if (nativeTrack) {
+				adoptYouTubeTrack(nativeTrack);
+			} else {
+				if (!injectedTrack) {
+					injectedTrack = video.addTextTrack(
 						"captions",
 						`Injected CC${p.has("tlang") ? " (TS)" : ""}`,
 						language,
 					);
-				track.mode = "showing"; // debug so not hidden
+				injectedTrack.mode = "showing"; // debug so not hidden
 				initVideo();
 				console.log("Injected captions track");
-			} else {
+			}
+				track = injectedTrack;
+			}
 				if (track?.cues) {
 					[...track.cues].forEach((cue) => track?.removeCue(cue)); // Clear existing cues
 
 					document.querySelector("#cue-list-panel")?.remove();
 					document.querySelector("#cue-editor")?.remove();
-				}
 			}
 		}
 
@@ -963,30 +1017,144 @@ XMLHttpRequest.prototype.open = function (...args) {
 	return origOpen.apply(this, args);
 };
 
-function initVideo() {
+function initVideo(nextVideo = getVideo()) {
+	if (!nextVideo) return;
+	if (observedVideo !== nextVideo) {
+		if (observedVideo) {
+			observedVideo.textTracks.onaddtrack = null;
+			observedVideo.textTracks.onchange = null;
+		}
+		video = nextVideo;
+		observedVideo = nextVideo;
+		track = null;
+		injectedTrack = null;
+		observedVideo.textTracks.onaddtrack = onTrackAdded;
+		observedVideo.textTracks.onchange = onTrackChange;
+		console.log("Video caption handlers initialized");
+	}
+	updateYouTubeTrack();
+
 	if (!video) return;
-	console.log("Video caption handlers initialized");
-/*
-	// fullscreen hooks
+		// fullscreen hooks
 	video.addEventListener("webkitbeginfullscreen", () => {
-		track && (track.mode = "showing");
+		injectedTrack && !nativeTrack && (injectedTrack.mode = "showing");
 	});
 
 	video.addEventListener("webkitendfullscreen", () => {
-		track && (track.mode = "hidden");
+		injectedTrack && !nativeTrack && (injectedTrack.mode = "hidden");
 	});
-*/
+	
 	new MutationObserver(() => {
-		if (!track?.cues?.length) return;
-		seen.clear();
-		/*[...track.cues].forEach((cue) => track?.removeCue(cue));
-		if (track?.mode === "showing") {
-			track.mode = "hidden";
-			track.mode = "showing";
+		if (!injectedTrack?.cues?.length) return;
+		[...injectedTrack.cues].forEach((cue) => injectedTrack?.removeCue(cue));
+		if (injectedTrack?.mode === "showing") {
+			injectedTrack.mode = "hidden";
+			injectedTrack.mode = "showing";
 		} // Refresh
-		 */
 		document.querySelector("#cue-list-panel")?.remove();
 		document.querySelector("#cue-editor")?.remove();
-		console.log("Video source changed");
+		console.log("Video source changed, cues cleared");
 	}).observe(video, { attributeFilter: ["src"] });
 }
+
+initVideo();
+
+
+/* ===== Track Debug Overlay ===== */
+(() => {
+    document.getElementById("track-debug")?.remove();
+
+    const panel = document.createElement("div");
+    panel.id = "track-debug";
+    panel.style.cssText = `
+        position:fixed;top:45px;left:8px;right:8px;
+        max-height:55vh;overflow:auto;
+        z-index:2147483647;background:#111f;
+        color:#baffba;border:1px solid #5b8;
+        border-radius:8px;padding:8px;
+        font:11px/1.4 monospace;
+        white-space:pre-wrap;overflow-wrap:anywhere;
+    `;
+
+    const output = document.createElement("pre");
+    output.style.cssText = "white-space:pre-wrap;margin:8px 0";
+
+    const refresh = document.createElement("button");
+    refresh.textContent = "Refresh";
+    refresh.onclick = render;
+
+    const hide = document.createElement("button");
+    hide.textContent = "Hide";
+    hide.onclick = () => {
+        panel.remove();
+        show.style.display = "block";
+    };
+
+    const show = document.createElement("button");
+    show.textContent = "Track Debug";
+    show.style.cssText = `
+        display:none;position:fixed;top:45px;left:8px;
+        z-index:2147483647;padding:8px;
+    `;
+    show.onclick = () => {
+        document.body.append(panel);
+        show.style.display = "none";
+        render();
+    };
+
+    function describe(name, t) {
+        if (!t) return `${name}: null\n`;
+
+        const cues = t.cues ? [...t.cues] : [];
+        const active = t.activeCues ? [...t.activeCues] : [];
+
+				if (name != "track") {
+					if (name != "injectedTrack") {
+						if (t === track) {
+							return `${name}: same as track`;
+						}
+						if (t === nativeTrack) {
+							return `${name}: same as nativeTrack`;
+						}
+					} else {
+						if (t === track) {
+							return `${name}: same as track`;
+						}
+						if (t === injectedTrack) {
+							return `${name}: same as injectedTrack`;
+						}
+					}
+				}
+
+        return `${name}:
+  same as track: ${t === track}
+  same as nativeTrack: ${t === nativeTrack}
+  same as injectedTrack: ${t === injectedTrack}
+  kind: ${t.kind}
+  label: ${JSON.stringify(t.label)}
+  language: ${JSON.stringify(t.language)}
+  mode: ${t.mode}
+  cues: ${cues.length}
+  active cues: ${active.length}
+${active.map(c =>
+    `    [${c.startTime.toFixed(2)}–${c.endTime.toFixed(2)}] ${c.text}`
+).join("\n") || "    (none)"}
+
+`;
+    }
+
+    function render() {
+        output.textContent =
+            describe("track", track) +
+            describe("nativeTrack", nativeTrack) +
+            describe("injectedTrack", injectedTrack);
+    }
+
+    panel.append(refresh, hide, output);
+    document.body.append(panel, show);
+
+    render();
+    setInterval(() => {
+        if (panel.isConnected) render();
+    }, 1000);
+})();
