@@ -356,6 +356,30 @@ function buildCueList(track) {
 
 	document.body.appendChild(panel);
 }
+
+function createStyleEditorButton() {
+	const btn = document.createElement("button");
+
+	btn.id = "caption-style-btn";
+	btn.textContent = "CC CSS";
+
+	btn.style.position = "fixed";
+	btn.style.left = "100px";
+	btn.style.bottom = "12px";
+	btn.style.zIndex = "999999";
+
+	btn.onclick = () => {
+		try {
+			openStyleEditor();
+		} catch (err) {
+			alert(err + "\n\n" + err.stack);
+		}
+	};
+
+	document.body.appendChild(btn);
+}
+
+createStyleEditorButton();
 // #End of debug code
 
 /// <reference path="./types-def.js" />
@@ -389,6 +413,8 @@ let injectedTrack = null;
 let nativeTrack;
 /** @type {HTMLVideoElement | null} */
 let observedVideo = null;
+/** @type {{json: Json3, isAutoGen: boolean, keyString: string} | null} */
+let lastCaptionData = null;
 
 function getYouTubeTrack() {
 	if (!video) return;
@@ -411,6 +437,75 @@ function updateYouTubeTrack(_nativeTrack = undefined) {
 	if (nativeTrack) {
 		adoptYouTubeTrack(nativeTrack);
 	} else track = injectedTrack;
+}
+
+function clearTrackCues(targetTrack) {
+	if (!targetTrack?.cues) return;
+
+	for (const cue of [...targetTrack.cues]) {
+		try {
+			targetTrack.removeCue(cue);
+		} catch (err) {
+			console.warn("Could not remove cue:", cue, err);
+		}
+	}
+}
+
+function attemptAddCaptionsToYouTubeTrack() {
+	const currentVideo = getVideo();
+	if (!currentVideo) {
+		alert("No video element was found.");
+		return false;
+	}
+
+	initVideo(currentVideo);
+
+	const youtubeTrack = getYouTubeTrack();
+	if (!youtubeTrack) {
+		alert(
+			"YouTube's native text track was not found yet.\n\n" +
+				"Try enabling captions in YouTube, then use fullscreen.",
+		);
+		return false;
+	}
+
+	if (!lastCaptionData) {
+		alert(
+			"No cached caption data is available yet.\n\n" +
+				"Enable or change captions once so the script can capture a timedtext response.",
+		);
+		return false;
+	}
+
+	try {
+		nativeTrack = youtubeTrack;
+		track = youtubeTrack;
+
+		clearTrackCues(youtubeTrack);
+		addCuesToTrack(lastCaptionData.json, lastCaptionData.isAutoGen);
+
+		document.querySelector("#cue-list-panel")?.remove();
+		document.querySelector("#cue-editor")?.remove();
+
+		console.log(
+			"Manually added captions to YouTube track:",
+			youtubeTrack,
+			lastCaptionData.keyString,
+		);
+
+		alert(
+			`Added ${youtubeTrack.cues?.length ?? 0} cues to YouTube's track.\n\n` +
+				`Track mode: ${youtubeTrack.mode}`,
+		);
+
+		return true;
+	} catch (err) {
+		console.error("Manual caption injection failed:", err);
+		alert(
+			`Could not add captions to YouTube's track:\n${err}\n\n${err.stack || ""}`,
+		);
+		return false;
+	}
 }
 
 function onTrackAdded(event) {
@@ -985,33 +1080,53 @@ XMLHttpRequest.prototype.open = function (...args) {
 						`Injected CC${p.has("tlang") ? " (TS)" : ""}`,
 						language,
 					);
-				injectedTrack.mode = "showing"; // debug so not hidden
-				initVideo();
-				console.log("Injected captions track");
-			}
+					injectedTrack.mode = "showing"; // debug so not hidden
+					initVideo();
+					console.log("Injected captions track");
+				}
 				track = injectedTrack;
 			}
-				if (track?.cues) {
-					[...track.cues].forEach((cue) => track?.removeCue(cue)); // Clear existing cues
+			if (track?.cues) {
+				[...track.cues].forEach((cue) => track?.removeCue(cue)); // Clear existing cues
 
-					document.querySelector("#cue-list-panel")?.remove();
-					document.querySelector("#cue-editor")?.remove();
+				document.querySelector("#cue-list-panel")?.remove();
+				document.querySelector("#cue-editor")?.remove();
 			}
+		}
+
+		function cacheAndAddCaptionData(rawJson) {
+			const parsed = parseJson3(rawJson);
+
+			lastCaptionData = {
+				json: parsed,
+				isAutoGen,
+				keyString,
+			};
+
+			createTrack();
+			addCuesToTrack(parsed, isAutoGen);
+
+			console.log("Cached caption data:", {
+				keyString,
+				eventCount: parsed.events?.length ?? 0,
+				isAutoGen,
+			});
 		}
 
 		if (!isWantedLang && !p.has("tlang")) {
 			[...p.keys()].forEach(
 				(key) => removeParams.includes(key) && p.delete(key),
 			);
+
 			p.set("tlang", userLang);
 
-			createTrack();
 			tryFetch("json3")
-				.then((json) => addCuesToTrack(parseJson3(json), isAutoGen))
-				.catch((err) => alert(`Error adding captions: ${err}\n${err.stack}`));
+				.then(cacheAndAddCaptionData)
+				.catch((err) =>
+					alert(`Error adding captions: ${err}\n${err.stack || ""}`),
+				);
 		} else {
-			createTrack();
-			addCuesToTrack(parseJson3(this.responseText), isAutoGen);
+			cacheAndAddCaptionData(this.responseText);
 		}
 	});
 	return origOpen.apply(this, args);
@@ -1035,7 +1150,7 @@ function initVideo(nextVideo = getVideo()) {
 	updateYouTubeTrack();
 
 	if (!video) return;
-		// fullscreen hooks
+	// fullscreen hooks
 	video.addEventListener("webkitbeginfullscreen", () => {
 		injectedTrack && !nativeTrack && (injectedTrack.mode = "showing");
 	});
@@ -1043,7 +1158,7 @@ function initVideo(nextVideo = getVideo()) {
 	video.addEventListener("webkitendfullscreen", () => {
 		injectedTrack && !nativeTrack && (injectedTrack.mode = "hidden");
 	});
-	
+
 	new MutationObserver(() => {
 		if (!injectedTrack?.cues?.length) return;
 		[...injectedTrack.cues].forEach((cue) => injectedTrack?.removeCue(cue));
@@ -1059,74 +1174,88 @@ function initVideo(nextVideo = getVideo()) {
 
 initVideo();
 
-
 /* ===== Track Debug Overlay ===== */
 (() => {
-    document.getElementById("track-debug")?.remove();
+	document.getElementById("track-debug")?.remove();
+	document.getElementById("track-debug-show")?.remove();
 
-    const panel = document.createElement("div");
-    panel.id = "track-debug";
-    panel.style.cssText = `
-        position:fixed;top:45px;left:8px;right:8px;
-        max-height:55vh;overflow:auto;
-        z-index:2147483647;background:#111f;
-        color:#baffba;border:1px solid #5b8;
-        border-radius:8px;padding:8px;
-        font:11px/1.4 monospace;
-        white-space:pre-wrap;overflow-wrap:anywhere;
-    `;
+	const panel = document.createElement("div");
+	panel.id = "track-debug";
+	panel.style.cssText = `
+		display:none;
+		position:fixed;
+		top:45px;
+		left:8px;
+		right:8px;
+		max-height:55vh;
+		overflow:auto;
+		z-index:2147483647;
+		background:#111f;
+		color:#baffba;
+		border:1px solid #5b8;
+		border-radius:8px;
+		padding:8px;
+		font:11px/1.4 monospace;
+		white-space:pre-wrap;
+		overflow-wrap:anywhere;
+	`;
 
-    const output = document.createElement("pre");
-    output.style.cssText = "white-space:pre-wrap;margin:8px 0";
+	const controls = document.createElement("div");
+	controls.style.cssText = `
+		display:flex;
+		flex-wrap:wrap;
+		gap:6px;
+		position:sticky;
+		top:0;
+		background:#111;
+		padding-bottom:8px;
+	`;
 
-    const refresh = document.createElement("button");
-    refresh.textContent = "Refresh";
-    refresh.onclick = render;
+	const output = document.createElement("pre");
+	output.style.cssText = "white-space:pre-wrap;margin:8px 0";
 
-    const hide = document.createElement("button");
-    hide.textContent = "Hide";
-    hide.onclick = () => {
-        panel.remove();
-        show.style.display = "block";
-    };
+	const refresh = document.createElement("button");
+	refresh.textContent = "Refresh";
+	refresh.onclick = render;
 
-    const show = document.createElement("button");
-    show.textContent = "Track Debug";
-    show.style.cssText = `
-        display:none;position:fixed;top:45px;left:8px;
-        z-index:2147483647;padding:8px;
-    `;
-    show.onclick = () => {
-        document.body.append(panel);
-        show.style.display = "none";
-        render();
-    };
+	const addToYouTube = document.createElement("button");
+	addToYouTube.textContent = "Add captions to YouTube track";
+	addToYouTube.onclick = () => {
+		attemptAddCaptionsToYouTubeTrack();
+		render();
+	};
 
-    function describe(name, t) {
-        if (!t) return `${name}: null\n`;
+	const hide = document.createElement("button");
+	hide.textContent = "Hide track data";
+	hide.onclick = () => {
+		panel.style.display = "none";
+		show.style.display = "block";
+	};
 
-        const cues = t.cues ? [...t.cues] : [];
-        const active = t.activeCues ? [...t.activeCues] : [];
+	const show = document.createElement("button");
+	show.id = "track-debug-show";
+	show.textContent = "Track Debug";
+	show.style.cssText = `
+		display:block;
+		position:fixed;
+		top:45px;
+		left:8px;
+		z-index:2147483647;
+		padding:8px;
+	`;
+	show.onclick = () => {
+		panel.style.display = "block";
+		show.style.display = "none";
+		render();
+	};
 
-				if (name != "track") {
-					if (name != "injectedTrack") {
-						if (t === track) {
-							return `${name}: same as track`;
-						}
-						if (t === nativeTrack) {
-							return `${name}: same as nativeTrack`;
-						}
-					} else {
-						if (t === track) {
-							return `${name}: same as track`;
-						}
-						if (t === injectedTrack) {
-							return `${name}: same as injectedTrack`;
-						}
-					}
-				}
+	function describe(name, t) {
+		if (!t) return `${name}: null\n\n`;
 
-        return `${name}:
+		const cues = t.cues ? [...t.cues] : [];
+		const active = t.activeCues ? [...t.activeCues] : [];
+
+		return `${name}:
   same as track: ${t === track}
   same as nativeTrack: ${t === nativeTrack}
   same as injectedTrack: ${t === injectedTrack}
@@ -1136,25 +1265,43 @@ initVideo();
   mode: ${t.mode}
   cues: ${cues.length}
   active cues: ${active.length}
-${active.map(c =>
-    `    [${c.startTime.toFixed(2)}–${c.endTime.toFixed(2)}] ${c.text}`
+${active.map((c) =>
+	`    [${c.startTime.toFixed(2)}-${c.endTime.toFixed(2)}] ${c.text}`
 ).join("\n") || "    (none)"}
 
 `;
-    }
+	}
 
-    function render() {
-        output.textContent =
-            describe("track", track) +
-            describe("nativeTrack", nativeTrack) +
-            describe("injectedTrack", injectedTrack);
-    }
+	function render() {
+		const currentYouTubeTrack = getYouTubeTrack();
 
-    panel.append(refresh, hide, output);
-    document.body.append(panel, show);
+		output.textContent =
+			`Cached caption data:
+  available: ${Boolean(lastCaptionData)}
+  key: ${lastCaptionData?.keyString ?? "(none)"}
+  events: ${lastCaptionData?.json?.events?.length ?? 0}
+  auto-generated: ${lastCaptionData?.isAutoGen ?? false}
 
-    render();
-    setInterval(() => {
-        if (panel.isConnected) render();
-    }, 1000);
+` +
+			describe("track", track) +
+			describe("nativeTrack", nativeTrack) +
+			describe("injectedTrack", injectedTrack) +
+			describe("current YouTube track", currentYouTubeTrack);
+	}
+
+	controls.append(refresh, addToYouTube, hide);
+	panel.append(controls, output);
+
+	document.body.append(panel, show);
+
+	/*
+	 * Track data starts hidden. Only the small Track Debug button is shown.
+	 */
+	render();
+
+	setInterval(() => {
+		if (panel.isConnected && panel.style.display !== "none") {
+			render();
+		}
+	}, 1000);
 })();
