@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         MWeb Youtube Captions Patch (dev)
 // @author       Sukinyu
-// @version      63
+// @version      64
 // @match        https://m.youtube.com/*
 // @updateURL    https://github.com/Sukinyu/youtube-ios-caption-patch/raw/refs/heads/main/test.user.js
 // @downloadURL  https://github.com/Sukinyu/youtube-ios-caption-patch/raw/refs/heads/main/test.user.js
@@ -277,8 +277,8 @@ function openStyleEditor() {
 
 		const presetValues = [
 			"::cue(c) { line-height: 1.0; font-size: 100%; }",
-			"::cue(c) { line-height: 1.2; font-size: 110%; }",
-			"::cue(c) { line-height: 1.5; font-size: 100%; }",
+			"::cue(c) { line-height: 1.2; font-size: 100%; }",
+			"::cue(c) { line-height: default; font-size: 100%; }",
 		];
 
 		presetValues.forEach((value) => {
@@ -974,26 +974,26 @@ XMLHttpRequest.prototype.open = function (...args) {
 				return r.text();
 			});
 		};
-
+		if (video !== v) {
+			// Update video reference if changed
+			video = v;
+			track = null; // Reset track for new video
+		}
 		function createTrack() {
 			const language = p.get("tlang") || p.get("lang") || userLang;
 			const nativeTrack = getYouTubeTrack();
 			if (!video) return;
-			if (nativeTrack) {
-				adoptYouTubeTrack(nativeTrack);
-			} else {
-				if (!injectedTrack) {
-					injectedTrack = video.addTextTrack(
-						"captions",
-						`Injected CC${p.has("tlang") ? " (TS)" : ""}`,
-						language,
-					);
-					injectedTrack.mode = "showing"; // debug so not hidden
-					initVideo();
-					console.log("Injected captions track");
-				}
-				track = injectedTrack;
+			if (!injectedTrack) {
+				injectedTrack = video.addTextTrack(
+					"captions",
+					`Injected CC${p.has("tlang") ? " (TS)" : ""}`,
+					language,
+				);
+				injectedTrack.mode = "showing"; // debug so not hidden
+				initVideo();
+				console.log("Injected captions track");
 			}
+			track = injectedTrack;
 			if (track?.cues) {
 				[...track.cues].forEach((cue) => track?.removeCue(cue)); // Clear existing cues
 
@@ -1038,11 +1038,11 @@ function initVideo(nextVideo = getVideo()) {
 	if (!video) return;
 	// fullscreen hooks
 	video.addEventListener("webkitbeginfullscreen", () => {
-		injectedTrack && !nativeTrack && (injectedTrack.mode = "showing");
+		track && (track.mode = "showing");
 	});
 
 	video.addEventListener("webkitendfullscreen", () => {
-		injectedTrack && !nativeTrack && (injectedTrack.mode = "hidden");
+		track && (track.mode = "hidden");
 	});
 
 	new MutationObserver(() => {
@@ -1133,10 +1133,12 @@ initVideo();
 
 		const cues = t.cues ? [...t.cues] : [];
 		const active = t.activeCues ? [...t.activeCues] : [];
-
+		let extra = "";
+		if (name === "current YouTube track" && t) {
+			extra = `YouTube Track mode: ${t.mode}`;
+		}
 		return `${name}:
   same as track: ${t === track}
-  same as nativeTrack: ${t === nativeTrack}
   same as injectedTrack: ${t === injectedTrack}
   kind: ${t.kind}
   label: ${JSON.stringify(t.label)}
@@ -1152,7 +1154,7 @@ ${
 		)
 		.join("\n") || "    (none)"
 }
-
+${extra}
 `;
 	}
 
@@ -1180,5 +1182,5 @@ ${
 		if (panel.isConnected && panel.style.display !== "none") {
 			render();
 		}
-	}, 1000);
+	}, 500);
 })();
