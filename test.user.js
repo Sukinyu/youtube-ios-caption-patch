@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         MWeb Youtube Captions Patch (dev)
 // @author       Sukinyu
-// @version      62
+// @version      63
 // @match        https://m.youtube.com/*
 // @updateURL    https://github.com/Sukinyu/youtube-ios-caption-patch/raw/refs/heads/main/test.user.js
 // @downloadURL  https://github.com/Sukinyu/youtube-ios-caption-patch/raw/refs/heads/main/test.user.js
@@ -413,8 +413,6 @@ let injectedTrack = null;
 let nativeTrack;
 /** @type {HTMLVideoElement | null} */
 let observedVideo = null;
-/** @type {{json: Json3, isAutoGen: boolean, keyString: string} | null} */
-let lastCaptionData = null;
 
 function getYouTubeTrack() {
 	if (!video) return;
@@ -424,101 +422,12 @@ function getYouTubeTrack() {
 	);
 }
 
-function adoptYouTubeTrack(_nativeTrack) {
-	if (injectedTrack && injectedTrack !== _nativeTrack) {
-		injectedTrack.mode = "disabled";
-	}
-	_nativeTrack && (track = _nativeTrack);
-}
-
-function updateYouTubeTrack(_nativeTrack = undefined) {
-	if (!video) return;
-	nativeTrack = _nativeTrack ?? getYouTubeTrack();
-	if (nativeTrack) {
-		adoptYouTubeTrack(nativeTrack);
-	} else track = injectedTrack;
-}
-
-function clearTrackCues(targetTrack) {
-	if (!targetTrack?.cues) return;
-
-	for (const cue of [...targetTrack.cues]) {
-		try {
-			targetTrack.removeCue(cue);
-		} catch (err) {
-			console.warn("Could not remove cue:", cue, err);
-		}
-	}
-}
-
-function attemptAddCaptionsToYouTubeTrack() {
-	const currentVideo = getVideo();
-	if (!currentVideo) {
-		alert("No video element was found.");
-		return false;
-	}
-
-	initVideo(currentVideo);
-
-	const youtubeTrack = getYouTubeTrack();
-	if (!youtubeTrack) {
-		alert(
-			"YouTube's native text track was not found yet.\n\n" +
-				"Try enabling captions in YouTube, then use fullscreen.",
-		);
-		return false;
-	}
-
-	if (!lastCaptionData) {
-		alert(
-			"No cached caption data is available yet.\n\n" +
-				"Enable or change captions once so the script can capture a timedtext response.",
-		);
-		return false;
-	}
-
-	try {
-		nativeTrack = youtubeTrack;
-		track = youtubeTrack;
-
-		clearTrackCues(youtubeTrack);
-		addCuesToTrack(lastCaptionData.json, lastCaptionData.isAutoGen);
-
-		document.querySelector("#cue-list-panel")?.remove();
-		document.querySelector("#cue-editor")?.remove();
-
-		console.log(
-			"Manually added captions to YouTube track:",
-			youtubeTrack,
-			lastCaptionData.keyString,
-		);
-
-		alert(
-			`Added ${youtubeTrack.cues?.length ?? 0} cues to YouTube's track.\n\n` +
-				`Track mode: ${youtubeTrack.mode}`,
-		);
-
-		return true;
-	} catch (err) {
-		console.error("Manual caption injection failed:", err);
-		alert(
-			`Could not add captions to YouTube's track:\n${err}\n\n${err.stack || ""}`,
-		);
-		return false;
-	}
-}
-
 function onTrackAdded(event) {
 	if (!video) return;
-	let track = getYouTubeTrack();
-	if (!track || event.track != track) return;
-	updateYouTubeTrack();
-	alert(`Native Track added: ${track.label} (${track.language})`);
+	const t = event.track;
+	t.kind === "forced" && t.language === "" && (t.mode = "disabled");
 }
 
-function onTrackChange() {
-	updateYouTubeTrack();
-}
 /** @type {(videoWidth: number, videoHeight: number) => number} */
 function calculateBaseFontSize(videoWidth, videoHeight) {
 	let baseSize = (videoHeight / 360) * 16;
@@ -1056,7 +965,6 @@ XMLHttpRequest.prototype.open = function (...args) {
 		const userLang = navigator.language.split("-")[0] || "en"; // Use browser language or default to English
 		const isWantedLang = p.get("lang")?.startsWith(userLang);
 		const isAutoGen = p.get("kind") === "asr";
-		updateYouTubeTrack();
 
 		const tryFetch = (returnFormat) => {
 			p.set("fmt", returnFormat);
@@ -1094,39 +1002,19 @@ XMLHttpRequest.prototype.open = function (...args) {
 			}
 		}
 
-		function cacheAndAddCaptionData(rawJson) {
-			const parsed = parseJson3(rawJson);
-
-			lastCaptionData = {
-				json: parsed,
-				isAutoGen,
-				keyString,
-			};
-
-			createTrack();
-			addCuesToTrack(parsed, isAutoGen);
-
-			console.log("Cached caption data:", {
-				keyString,
-				eventCount: parsed.events?.length ?? 0,
-				isAutoGen,
-			});
-		}
-
 		if (!isWantedLang && !p.has("tlang")) {
 			[...p.keys()].forEach(
 				(key) => removeParams.includes(key) && p.delete(key),
 			);
-
 			p.set("tlang", userLang);
 
+			createTrack();
 			tryFetch("json3")
-				.then(cacheAndAddCaptionData)
-				.catch((err) =>
-					alert(`Error adding captions: ${err}\n${err.stack || ""}`),
-				);
+				.then((json) => addCuesToTrack(parseJson3(json), isAutoGen))
+				.catch((err) => alert(`Error adding captions: ${err}\n${err.stack}`));
 		} else {
-			cacheAndAddCaptionData(this.responseText);
+			createTrack();
+			addCuesToTrack(parseJson3(this.responseText), isAutoGen);
 		}
 	});
 	return origOpen.apply(this, args);
@@ -1144,10 +1032,8 @@ function initVideo(nextVideo = getVideo()) {
 		track = null;
 		injectedTrack = null;
 		observedVideo.textTracks.onaddtrack = onTrackAdded;
-		observedVideo.textTracks.onchange = onTrackChange;
 		console.log("Video caption handlers initialized");
 	}
-	updateYouTubeTrack();
 
 	if (!video) return;
 	// fullscreen hooks
@@ -1218,13 +1104,6 @@ initVideo();
 	refresh.textContent = "Refresh";
 	refresh.onclick = render;
 
-	const addToYouTube = document.createElement("button");
-	addToYouTube.textContent = "Add captions to YouTube track";
-	addToYouTube.onclick = () => {
-		attemptAddCaptionsToYouTubeTrack();
-		render();
-	};
-
 	const hide = document.createElement("button");
 	hide.textContent = "Hide track data";
 	hide.onclick = () => {
@@ -1265,9 +1144,14 @@ initVideo();
   mode: ${t.mode}
   cues: ${cues.length}
   active cues: ${active.length}
-${active.map((c) =>
-	`    [${c.startTime.toFixed(2)}-${c.endTime.toFixed(2)}] ${c.text}`
-).join("\n") || "    (none)"}
+${
+	active
+		.map(
+			(c) =>
+				`    [${c.startTime.toFixed(2)}-${c.endTime.toFixed(2)}] ${c.text}`,
+		)
+		.join("\n") || "    (none)"
+}
 
 `;
 	}
@@ -1276,20 +1160,13 @@ ${active.map((c) =>
 		const currentYouTubeTrack = getYouTubeTrack();
 
 		output.textContent =
-			`Cached caption data:
-  available: ${Boolean(lastCaptionData)}
-  key: ${lastCaptionData?.keyString ?? "(none)"}
-  events: ${lastCaptionData?.json?.events?.length ?? 0}
-  auto-generated: ${lastCaptionData?.isAutoGen ?? false}
-
-` +
 			describe("track", track) +
 			describe("nativeTrack", nativeTrack) +
 			describe("injectedTrack", injectedTrack) +
 			describe("current YouTube track", currentYouTubeTrack);
 	}
 
-	controls.append(refresh, addToYouTube, hide);
+	controls.append(refresh, hide);
 	panel.append(controls, output);
 
 	document.body.append(panel, show);
