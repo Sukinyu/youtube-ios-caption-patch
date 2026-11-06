@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         MWeb Youtube Captions Patch (beta)
 // @author       Sukinyu
-// @version      1.2.21
-// @last         10/27/2026 (mm/dd/yyyy)
+// @version      1.2.22
+// @last         11/6/2026 (mm/dd/yyyy)
 // @description  Fix captions on youtube videos in webkit fullscreen mode on iOS (https://m.youtube.com/).
 // @match        https://m.youtube.com/*
 // @updateURL    https://github.com/Sukinyu/youtube-ios-caption-patch/raw/refs/heads/main/beta.user.js
@@ -48,32 +48,13 @@ function getYouTubeTrack() {
 	);
 }
 
-function adoptYouTubeTrack(_nativeTrack) {
-	if (injectedTrack && injectedTrack !== _nativeTrack) {
-		injectedTrack.mode = "disabled";
-	}
-	_nativeTrack && (track = _nativeTrack);
-}
-
-function updateYouTubeTrack(_nativeTrack = undefined) {
-	if (!video) return;
-	nativeTrack = _nativeTrack ?? getYouTubeTrack();
-	if (nativeTrack) {
-		adoptYouTubeTrack(nativeTrack);
-	} else track = injectedTrack;
-}
-
 function onTrackAdded(event) {
 	if (!video) return;
-	let track = getYouTubeTrack();
-	if (!track || event.track != track) return;
-	updateYouTubeTrack();
-	alert(`Native Track added: ${track.label} (${track.language})`);
+	/** @type {TextTrack} */
+	const t = event.track;
+	t.kind === "forced" && t.language === "" && (t.mode = "disabled");
 }
 
-function onTrackChange() {
-	updateYouTubeTrack();
-}
 /** @type {(videoWidth: number, videoHeight: number) => number} */
 function calculateBaseFontSize(videoWidth, videoHeight) {
 	let baseSize = (videoHeight / 360) * 16;
@@ -552,7 +533,6 @@ XMLHttpRequest.prototype.open = function (...args) {
 		const userLang = navigator.language.split("-")[0] || "en"; // Use browser language or default to English
 		const isWantedLang = p.get("lang")?.startsWith(userLang);
 		const isAutoGen = p.get("kind") === "asr";
-		updateYouTubeTrack();
 
 		const tryFetch = (returnFormat) => {
 			p.set("fmt", returnFormat);
@@ -563,13 +543,15 @@ XMLHttpRequest.prototype.open = function (...args) {
 			});
 		};
 
+		if (video !== v) {
+			// Update video reference if changed
+			video = v;
+			track = null; // Reset track for new video
+		}
 		function createTrack() {
 			const language = p.get("tlang") || p.get("lang") || userLang;
-			const nativeTrack = getYouTubeTrack();
+			nativeTrack = getYouTubeTrack();
 			if (!video) return;
-			if (nativeTrack) {
-				adoptYouTubeTrack(nativeTrack);
-			} else {
 				if (!injectedTrack) {
 					injectedTrack = video.addTextTrack(
 						"captions",
@@ -580,7 +562,6 @@ XMLHttpRequest.prototype.open = function (...args) {
 					console.log("Injected captions track");
 				}
 				track = injectedTrack;
-			}
 			if (track?.cues) {
 				[...track.cues].forEach((cue) => track?.removeCue(cue)); // Clear existing cues
 			}
@@ -609,35 +590,40 @@ function initVideo(nextVideo = getVideo()) {
 	if (observedVideo !== nextVideo) {
 		if (observedVideo) {
 			observedVideo.textTracks.onaddtrack = null;
-			observedVideo.textTracks.onchange = null;
 		}
 		video = nextVideo;
 		observedVideo = nextVideo;
 		track = null;
 		injectedTrack = null;
 		observedVideo.textTracks.onaddtrack = onTrackAdded;
-		observedVideo.textTracks.onchange = onTrackChange;
 		console.log("Video caption handlers initialized");
 	}
-	updateYouTubeTrack();
 
 	if (!video) return;
 	// fullscreen hooks
-	video.addEventListener("webkitbeginfullscreen", () => {
-		injectedTrack && !nativeTrack && (injectedTrack.mode = "showing");
+	/* original method
+		video.addEventListener("webkitbeginfullscreen", () => {
+		track && (track.mode = "showing");
 	});
 
 	video.addEventListener("webkitendfullscreen", () => {
-		injectedTrack && !nativeTrack && (injectedTrack.mode = "hidden");
+		track && (track.mode = "hidden");
+	});
+	*/
+
+	video.addEventListener("webkitpresentationmodechanged", (event) => {
+		/** @type {HTMLVideoElement} */
+		const v = event.target;
+		if (v.webkitPresentationMode === "undefined") {
+			injectedTrack.mode = "disabled";
+		} else
+		injectedTrack.mode =
+				v.webkitPresentationMode !== "inline" || !v.webkitIsInExternalPlayback ? "hidden" : "showing";
 	});
 
 	new MutationObserver(() => {
 		if (!injectedTrack?.cues?.length) return;
 		[...injectedTrack.cues].forEach((cue) => injectedTrack?.removeCue(cue));
-		if (injectedTrack?.mode === "showing") {
-			injectedTrack.mode = "hidden";
-			injectedTrack.mode = "showing";
-		} // Refresh
 		console.log("Video source changed, cues cleared");
 	}).observe(video, { attributeFilter: ["src"] });
 }

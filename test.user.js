@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         MWeb Youtube Captions Patch (dev)
 // @author       Sukinyu
-// @version      64
+// @version      65
 // @match        https://m.youtube.com/*
 // @updateURL    https://github.com/Sukinyu/youtube-ios-caption-patch/raw/refs/heads/main/test.user.js
 // @downloadURL  https://github.com/Sukinyu/youtube-ios-caption-patch/raw/refs/heads/main/test.user.js
@@ -422,10 +422,22 @@ function getYouTubeTrack() {
 	);
 }
 
+let CaptionMirrorCheck_error = false;
 function onTrackAdded(event) {
 	if (!video) return;
+	/** @type {TextTrack} */
 	const t = event.track;
 	t.kind === "forced" && t.language === "" && (t.mode = "disabled");
+	if (!CaptionMirrorCheck_error) {
+		try {
+			// See if this can be accessed. I have doubts
+			CaptionMirror.invalidate();
+		} catch (e) {
+			alert("Error in CaptionMirror.invalidate(): \n" + e + "\n\n" + e.stack);
+			CaptionMirrorCheck_error = true;
+			t.kind = "metadata";
+		}
+	}
 }
 
 /** @type {(videoWidth: number, videoHeight: number) => number} */
@@ -974,6 +986,7 @@ XMLHttpRequest.prototype.open = function (...args) {
 				return r.text();
 			});
 		};
+
 		if (video !== v) {
 			// Update video reference if changed
 			video = v;
@@ -981,7 +994,7 @@ XMLHttpRequest.prototype.open = function (...args) {
 		}
 		function createTrack() {
 			const language = p.get("tlang") || p.get("lang") || userLang;
-			const nativeTrack = getYouTubeTrack();
+			nativeTrack = getYouTubeTrack();
 			if (!video) return;
 			if (!injectedTrack) {
 				injectedTrack = video.addTextTrack(
@@ -1025,7 +1038,6 @@ function initVideo(nextVideo = getVideo()) {
 	if (observedVideo !== nextVideo) {
 		if (observedVideo) {
 			observedVideo.textTracks.onaddtrack = null;
-			observedVideo.textTracks.onchange = null;
 		}
 		video = nextVideo;
 		observedVideo = nextVideo;
@@ -1037,6 +1049,7 @@ function initVideo(nextVideo = getVideo()) {
 
 	if (!video) return;
 	// fullscreen hooks
+	/* original method
 	video.addEventListener("webkitbeginfullscreen", () => {
 		track && (track.mode = "showing");
 	});
@@ -1044,14 +1057,21 @@ function initVideo(nextVideo = getVideo()) {
 	video.addEventListener("webkitendfullscreen", () => {
 		track && (track.mode = "hidden");
 	});
+	*/
+
+	video.addEventListener("webkitpresentationmodechanged", (event) => {
+		/** @type {HTMLVideoElement} */
+		const v = event.target;
+		if (v.webkitPresentationMode === "undefined") {
+			injectedTrack.mode = "disabled";
+		} else
+			injectedTrack.mode =
+				v.webkitPresentationMode !== "inline" || !v.webkitIsInExternalPlayback ? "hidden" : "showing";
+	});
 
 	new MutationObserver(() => {
 		if (!injectedTrack?.cues?.length) return;
 		[...injectedTrack.cues].forEach((cue) => injectedTrack?.removeCue(cue));
-		if (injectedTrack?.mode === "showing") {
-			injectedTrack.mode = "hidden";
-			injectedTrack.mode = "showing";
-		} // Refresh
 		document.querySelector("#cue-list-panel")?.remove();
 		document.querySelector("#cue-editor")?.remove();
 		console.log("Video source changed, cues cleared");
@@ -1159,13 +1179,15 @@ ${extra}
 	}
 
 	function render() {
-		const currentYouTubeTrack = getYouTubeTrack();
+		const _curYTTrack = getYouTubeTrack();
 
 		output.textContent =
 			describe("track", track) +
 			describe("nativeTrack", nativeTrack) +
-			describe("injectedTrack", injectedTrack) +
-			describe("current YouTube track", currentYouTubeTrack);
+			describe("injectedTrack", injectedTrack);
+
+		nativeTrack !== _curYTTrack &&
+			(output.textContent += describe("current YouTube track", _curYTTrack));
 	}
 
 	controls.append(refresh, hide);
