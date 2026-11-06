@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         MWeb Youtube Captions Patch (dev)
 // @author       Sukinyu
-// @version      65
+// @version      66
 // @match        https://m.youtube.com/*
 // @updateURL    https://github.com/Sukinyu/youtube-ios-caption-patch/raw/refs/heads/main/test.user.js
 // @downloadURL  https://github.com/Sukinyu/youtube-ios-caption-patch/raw/refs/heads/main/test.user.js
@@ -1066,7 +1066,7 @@ function initVideo(nextVideo = getVideo()) {
 			injectedTrack.mode = "disabled";
 		} else
 			injectedTrack.mode =
-				v.webkitPresentationMode !== "inline" || !v.webkitIsInExternalPlayback ? "hidden" : "showing";
+				v.webkitIsInExternalPlayback || v.webkitPresentationMode == "inline" ? "hidden" : "showing";
 	});
 
 	new MutationObserver(() => {
