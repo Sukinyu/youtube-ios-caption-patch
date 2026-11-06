@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         MWeb Youtube Captions Patch (dev)
 // @author       Sukinyu
-// @version      66
+// @version      67
 // @match        https://m.youtube.com/*
 // @updateURL    https://github.com/Sukinyu/youtube-ios-caption-patch/raw/refs/heads/main/test.user.js
 // @downloadURL  https://github.com/Sukinyu/youtube-ios-caption-patch/raw/refs/heads/main/test.user.js
@@ -418,7 +418,7 @@ function getYouTubeTrack() {
 	if (!video) return;
 	return [...video.textTracks].find(
 		// @ts-ignore
-		(track) => track.kind === "forced" && track.language === "",
+		(t) => t.kind === "forced" && !t.language,
 	);
 }
 
@@ -427,7 +427,7 @@ function onTrackAdded(event) {
 	if (!video) return;
 	/** @type {TextTrack} */
 	const t = event.track;
-	t.kind === "forced" && t.language === "" && (t.mode = "disabled");
+	if (t.kind !== "forced" && !t.language) return;
 	if (!CaptionMirrorCheck_error) {
 		try {
 			// See if this can be accessed. I have doubts
@@ -1066,7 +1066,9 @@ function initVideo(nextVideo = getVideo()) {
 			injectedTrack.mode = "disabled";
 		} else
 			injectedTrack.mode =
-				v.webkitIsInExternalPlayback || v.webkitPresentationMode == "inline" ? "hidden" : "showing";
+				v.webkitIsInExternalPlayback || v.webkitPresentationMode == "inline" ?
+					"hidden"
+				:	"showing";
 	});
 
 	new MutationObserver(() => {
