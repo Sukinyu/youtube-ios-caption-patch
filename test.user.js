@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         MWeb Youtube Captions Patch (dev)
 // @author       Sukinyu
-// @version      67
+// @version      68
 // @match        https://m.youtube.com/*
 // @updateURL    https://github.com/Sukinyu/youtube-ios-caption-patch/raw/refs/heads/main/test.user.js
 // @downloadURL  https://github.com/Sukinyu/youtube-ios-caption-patch/raw/refs/heads/main/test.user.js
@@ -409,35 +409,35 @@ let video = getVideo();
 let track = null;
 /** @type {TextTrack | null} */
 let injectedTrack = null;
-/** @type {TextTrack | undefined} */
-let nativeTrack;
 /** @type {HTMLVideoElement | null} */
 let observedVideo = null;
+/** @type {HTMLVideoElement | null} */
+let nativeTrack = null;
+let disableNativeTrack;
 
 function getYouTubeTrack() {
 	if (!video) return;
-	return [...video.textTracks].find(
+	if (nativeTrack && nativeTrack.cues?.length > 0) return nativeTrack;
+
+	return nativeTrack = [...video.textTracks].find(
 		// @ts-ignore
 		(t) => t.kind === "forced" && !t.language,
 	);
 }
 
-let CaptionMirrorCheck_error = false;
 function onTrackAdded(event) {
 	if (!video) return;
 	/** @type {TextTrack} */
 	const t = event.track;
+	// @ts-ignore
 	if (t.kind !== "forced" && !t.language) return;
-	if (!CaptionMirrorCheck_error) {
-		try {
-			// See if this can be accessed. I have doubts
-			CaptionMirror.invalidate();
-		} catch (e) {
-			alert("Error in CaptionMirror.invalidate(): \n" + e + "\n\n" + e.stack);
-			CaptionMirrorCheck_error = true;
-			t.kind = "metadata";
+disableNativeTrack = setInterval(() => {
+		if (!video) return;
+		const nativeTrack = getYouTubeTrack();
+		if (nativeTrack) {
+			nativeTrack.mode = "disabled";
 		}
-	}
+	}, 200);
 }
 
 /** @type {(videoWidth: number, videoHeight: number) => number} */
@@ -994,7 +994,6 @@ XMLHttpRequest.prototype.open = function (...args) {
 		}
 		function createTrack() {
 			const language = p.get("tlang") || p.get("lang") || userLang;
-			nativeTrack = getYouTubeTrack();
 			if (!video) return;
 			if (!injectedTrack) {
 				injectedTrack = video.addTextTrack(
@@ -1003,7 +1002,6 @@ XMLHttpRequest.prototype.open = function (...args) {
 					language,
 				);
 				injectedTrack.mode = "showing"; // debug so not hidden
-				initVideo();
 				console.log("Injected captions track");
 			}
 			track = injectedTrack;
@@ -1043,6 +1041,10 @@ function initVideo(nextVideo = getVideo()) {
 		observedVideo = nextVideo;
 		track = null;
 		injectedTrack = null;
+		if (disableNativeTrack) {
+			clearInterval(disableNativeTrack);
+			disableNativeTrack = null;
+		}
 		observedVideo.textTracks.onaddtrack = onTrackAdded;
 		console.log("Video caption handlers initialized");
 	}
@@ -1062,6 +1064,7 @@ function initVideo(nextVideo = getVideo()) {
 	video.addEventListener("webkitpresentationmodechanged", (event) => {
 		/** @type {HTMLVideoElement} */
 		const v = event.target;
+		if (!injectedTrack) return;
 		if (v.webkitPresentationMode === "undefined") {
 			injectedTrack.mode = "disabled";
 		} else
@@ -1182,7 +1185,7 @@ ${extra}
 
 	function render() {
 		const _curYTTrack = getYouTubeTrack();
-
+		
 		output.textContent =
 			describe("track", track) +
 			describe("nativeTrack", nativeTrack) +
