@@ -1,14 +1,14 @@
 // ==UserScript==
 // @name         MWeb Youtube Captions Patch (beta)
 // @author       Sukinyu
-// @version      1.2.25
-// @last         11/6/2026 (mm/dd/yyyy)
+// @version      1.2.26
+// @last         11/7/2026 (mm/dd/yyyy)
 // @description  Fix captions on youtube videos in webkit fullscreen mode on iOS (https://m.youtube.com/).
 // @match        https://m.youtube.com/*
 // @updateURL    https://github.com/Sukinyu/youtube-ios-caption-patch/raw/refs/heads/main/beta.user.js
 // @downloadURL  https://github.com/Sukinyu/youtube-ios-caption-patch/raw/refs/heads/main/beta.user.js
 // ==/UserScript==
-/// <reference path="./types-def.js" />
+/// <reference path="./types-def.ts" />
 /** @type {Set<string>} */
 const Seen = new Set();
 
@@ -29,26 +29,27 @@ const removeParams = [
 	"cosver",
 	"cplatform",
 ];
-/** @type {HTMLVideoElement | null} */
+/** @type {HTMLVideoElement?} */
 let video = getVideo();
-/** @type {TextTrack | null} */
-let track = null;
-/** @type {TextTrack | null} */
-let injectedTrack = null;
-/** @type {HTMLVideoElement | null} */
-let observedVideo = null;
-/** @type {HTMLVideoElement | null} */
-let nativeTrack = null;
+/** @type {TextTrack?} */
+let track;
+/** @type {TextTrack?} */
+let injectedTrack;
+/** @type {HTMLVideoElement?} */
+let observedVideo;
+/** @type {TextTrack | undefined} */
+let nativeTrack;
+/** @type {number} */
 let disableNativeTrack;
 
 function getYouTubeTrack() {
 	if (!video) return;
-	if (nativeTrack && nativeTrack.cues?.length > 0) return nativeTrack;
+	if (nativeTrack?.cues && nativeTrack.cues.length > 0) return nativeTrack;
 
-	return nativeTrack = [...video.textTracks].find(
+	return (nativeTrack = [...video.textTracks].find(
 		// @ts-ignore
 		(t) => t.kind === "forced" && !t.language,
-	);
+	));
 }
 
 function onTrackAdded(event) {
@@ -57,7 +58,7 @@ function onTrackAdded(event) {
 	const t = event.track;
 	// @ts-ignore
 	if (t.kind !== "forced" && !t.language) return;
-disableNativeTrack = setInterval(() => {
+	disableNativeTrack = setInterval(() => {
 		if (!video) return;
 		const nativeTrack = getYouTubeTrack();
 		if (nativeTrack) {
@@ -132,8 +133,8 @@ const parseJson3 = (json) => {
 const toKeyString = (p) =>
 	`${p.get("v")}|${p.get("lang")}|${p.get("tlang") ?? "  "}|${p.get("kind") ?? "  "}`;
 
-/** @type {(videoId: ?string, keyString: string) => boolean} */
-function seen(videoId = null, newKey) {
+/** @type {(videoId: string, keyString: string) => boolean} */
+function seen(videoId, newKey) {
 	if (Seen.size && ![...Seen].some((key) => key.split("|", 1)[0] === videoId)) {
 		Seen.clear();
 	}
@@ -143,7 +144,7 @@ function seen(videoId = null, newKey) {
 }
 
 /** @type {(video: HTMLVideoElement | null) => {width: number, height: number}} */
-function getVideoSize(video) {
+function getVideoSize(video = null) {
 	if (!video) return { width: 0, height: 0 };
 	if (!video["webkitDisplayingFullscreen"]) {
 		return { width: video.clientWidth, height: video.clientHeight };
@@ -330,7 +331,7 @@ function mapPosToCue(pos, pen, style, isAutoGen) {
 	if (hasAnchor && LEFT_ANCHORS.has(anchorPoint)) {
 		hor = Math.max(hor / (1 + fontSizeIncrement * 2), 2);
 	}
-	/** @type {AlignSetting | null} */
+	/** @type {AlignSetting?} */
 	let align =
 		LEFT_ANCHORS.has(anchorPoint) ? "left"
 		: RIGHT_ANCHORS.has(anchorPoint) ? "right"
@@ -618,21 +619,21 @@ function initVideo(nextVideo = getVideo()) {
 	video.addEventListener("webkitpresentationmodechanged", (event) => {
 		/** @type {HTMLVideoElement} */
 		const v = event.target;
-		if (!injectedTrack) return;
+		if (!track) return;
 		if (v.webkitPresentationMode === "undefined") {
-			injectedTrack.mode = "disabled";
+			track.mode = "disabled";
 		} else
-			injectedTrack.mode =
+			track.mode =
 				v.webkitIsInExternalPlayback || v.webkitPresentationMode == "inline" ?
 					"hidden"
 				:	"showing";
 	});
-
-	new MutationObserver(() => {
-		if (!injectedTrack?.cues?.length) return;
-		[...injectedTrack.cues].forEach((cue) => injectedTrack?.removeCue(cue));
-		console.log("Video source changed, cues cleared");
-	}).observe(video, { attributeFilter: ["src"] });
 }
 
 initVideo();
+
+document.addEventListener("yt-navigate-finish", (clearCues) => {
+	if (!track?.cues?.length) return;
+	[...track.cues].forEach((cue) => track?.removeCue(cue));
+	console.log("Source changed, cues cleared");
+});
